@@ -1,0 +1,111 @@
+/**
+ * 清洗规则
+ */
+export interface CleaningRule {
+  id?: number
+  tableName: string
+  columnName: string
+  columnDescription?: string
+  standardValue: string
+  dirtyValues: string[]
+  confidence: number
+  source: string
+  autoApply: boolean
+  usageCount?: number
+  successCount?: number
+  lastUsedAt?: string
+  createdAt?: string
+  updatedAt?: string
+  createdBy?: string
+  updatedBy?: string
+}
+
+/**
+ * 候选规则
+ */
+export interface CandidateRule {
+  id?: number
+  ruleId?: number
+  tableName: string
+  columnName: string
+  standardValue: string
+  candidateValue: string
+  confidence: number
+  affectedCount: number
+  reasoning?: string
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt?: string
+  reviewedAt?: string
+  reviewedBy?: string
+}
+
+/**
+ * 脏数据记录
+ */
+export interface DirtyDataRecord {
+  id: number
+  tableName: string
+  columnName: string
+  dirtyValue: string
+  standardValue: string
+  ruleId: number
+}
+
+/**
+ * 清洗预览
+ */
+export interface CleaningPreview {
+  ruleId: number
+  tableName: string
+  columnName: string
+  standardValue: string
+  affectedCount: number
+  samples: DirtyDataRecord[]
+}
+
+/**
+ * 清洗结果
+ */
+export interface CleaningResult {
+  taskId: number
+  totalRecords: number
+  cleanedRecords: number
+  success: boolean
+  errorMessage?: string
+}
+
+/**
+ * 清洗任务
+ */
+export interface CleaningTask {
+  id: number
+  taskName: string
+  tableName: string
+  columnName: string
+  totalRecords: number
+  cleanedRecords: number
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  errorMessage?: string
+  startedAt?: string
+  completedAt?: string
+  createdAt: string
+  createdBy: string
+}
+
+/**
+ * 值计数
+ */
+export interface ValueCount {
+  value: string
+  count: number
+}
+
+/**
+ * API 响应
+ */
+export interface ApiResponse<T = any> {
+  success: boolean
+  data?: T
+  message?: string
+  error?: string
+}
