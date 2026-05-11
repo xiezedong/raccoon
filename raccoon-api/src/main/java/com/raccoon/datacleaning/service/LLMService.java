@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class LLMService {
 
     private final DataCleaningProperties properties;
+    private final SystemConfigService systemConfigService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private OkHttpClient httpClient;
 
@@ -36,9 +37,13 @@ public class LLMService {
             // 构建请求体
             String requestBody = buildRequestBody(prompt);
             
+            // 从数据库获取配置（优先级更高）
+            String apiUrl = getConfigValue("llm.api_url", properties.getLlm().getApiUrl());
+            String apiKey = getConfigValue("llm.api_key", properties.getLlm().getApiKey());
+            
             Request request = new Request.Builder()
-                    .url(properties.getLlm().getApiUrl())
-                    .addHeader("Authorization", "Bearer " + properties.getLlm().getApiKey())
+                    .url(apiUrl)
+                    .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("Content-Type", "application/json")
                     .post(RequestBody.create(requestBody, MediaType.parse("application/json")))
                     .build();
@@ -64,6 +69,10 @@ public class LLMService {
      * 构建请求体
      */
     private String buildRequestBody(String prompt) throws IOException {
+        String model = getConfigValue("llm.model", properties.getLlm().getModel());
+        String temperature = getConfigValue("llm.temperature", properties.getLlm().getTemperature().toString());
+        String maxTokens = getConfigValue("llm.max_tokens", properties.getLlm().getMaxTokens().toString());
+        
         String json = String.format("""
             {
                 "model": "%s",
@@ -78,13 +87,13 @@ public class LLMService {
                     }
                 ],
                 "temperature": %s,
-                "max_tokens": %d
+                "max_tokens": %s
             }
             """,
-            properties.getLlm().getModel(),
+            model,
             objectMapper.writeValueAsString(prompt),
-            properties.getLlm().getTemperature(),
-            properties.getLlm().getMaxTokens()
+            temperature,
+            maxTokens
         );
         
         return json;
@@ -122,5 +131,18 @@ public class LLMService {
                     .build();
         }
         return httpClient;
+    }
+
+    /**
+     * 获取配置值（优先从数据库读取）
+     */
+    private String getConfigValue(String key, String defaultValue) {
+        try {
+            String value = systemConfigService.getConfig(key);
+            return value != null ? value : defaultValue;
+        } catch (Exception e) {
+            log.warn("从数据库读取配置失败，使用默认值: {}", key);
+            return defaultValue;
+        }
     }
 }

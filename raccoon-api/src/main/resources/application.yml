@@ -64,9 +64,8 @@ data-cleaning:
   
   # 大模型配置
   llm:
-    provider: openai  # openai / qianwen / wenxin
-    api-key: ${LLM_API_KEY:your-api-key-here}
     api-url: https://api.openai.com/v1/chat/completions
+    api-key: ${LLM_API_KEY:your-api-key-here}
     model: gpt-4
     temperature: 0.3
     max-tokens: 2000

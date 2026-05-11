@@ -47,9 +47,8 @@ public class DataCleaningProperties {
 
     @Data
     public static class Llm {
-        private String provider = "openai";
-        private String apiKey;
         private String apiUrl = "https://api.openai.com/v1/chat/completions";
+        private String apiKey;
         private String model = "gpt-4";
         private Double temperature = 0.3;
         private Integer maxTokens = 2000;

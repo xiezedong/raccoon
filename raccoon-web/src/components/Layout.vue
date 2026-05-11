@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Document, Search, Operation, List } from '@element-plus/icons-vue'
+import { Document, Search, Operation, List, Setting } from '@element-plus/icons-vue'
 
 const route = useRoute()
 
@@ -51,7 +51,8 @@ const menuItems = [
   { path: '/rules', label: '规则管理', icon: Document },
   { path: '/discovery', label: 'AI 发现', icon: Search },
   { path: '/execution', label: '清洗执行', icon: Operation },
-  { path: '/logs', label: '清洗日志', icon: List }
+  { path: '/logs', label: '清洗日志', icon: List },
+  { path: '/settings', label: '系统设置', icon: Setting }
 ]
 
 const currentPageTitle = computed(() => {

@@ -29,6 +29,12 @@ const routes: RouteRecordRaw[] = [
     name: 'CleaningLogs',
     component: () => import('@/views/CleaningLogs.vue'),
     meta: { title: '清洗日志' }
+  },
+  {
+    path: '/settings',
+    name: 'SystemSettings',
+    component: () => import('@/views/SystemSettings.vue'),
+    meta: { title: '系统设置' }
   }
 ]
 
