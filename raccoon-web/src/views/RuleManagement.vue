@@ -71,9 +71,9 @@
         <el-form-item label="标准值" prop="standardValue">
           <el-input v-model="form.standardValue" placeholder="请输入标准值" />
         </el-form-item>
-        <el-form-item label="错误值" prop="dirtyValues">
+        <el-form-item label="错误值" prop="dirtyValuesInput">
           <el-input
-            v-model="dirtyValuesInput"
+            v-model="form.dirtyValuesInput"
             type="textarea"
             :rows="3"
             placeholder="请输入错误值，多个值用顿号、逗号或分号分隔"
@@ -104,14 +104,14 @@ const rules = ref<CleaningRule[]>([])
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增规则')
 const formRef = ref()
-const dirtyValuesInput = ref('')
 
-const form = reactive<CleaningRule>({
+const form = reactive<CleaningRule & { dirtyValuesInput?: string }>({
   tableName: '',
   columnName: '',
   columnDescription: '',
   standardValue: '',
   dirtyValues: [],
+  dirtyValuesInput: '',
   confidence: 1.0,
   source: 'manual',
   autoApply: false
@@ -121,7 +121,7 @@ const formRules = {
   tableName: [{ required: true, message: '请输入表名', trigger: 'blur' }],
   columnName: [{ required: true, message: '请输入字段名', trigger: 'blur' }],
   standardValue: [{ required: true, message: '请输入标准值', trigger: 'blur' }],
-  dirtyValues: [{ required: true, message: '请输入错误值', trigger: 'blur' }]
+  dirtyValuesInput: [{ required: true, message: '请输入错误值', trigger: 'blur' }]
 }
 
 onMounted(() => {
@@ -148,7 +148,7 @@ function handleAdd() {
 function handleEdit(row: CleaningRule) {
   dialogTitle.value = '编辑规则'
   Object.assign(form, row)
-  dirtyValuesInput.value = row.dirtyValues.join('、')
+  form.dirtyValuesInput = row.dirtyValues.join('、')
   dialogVisible.value = true
 }
 
@@ -171,7 +171,7 @@ async function handleSubmit() {
     await formRef.value.validate()
     
     // 解析错误值
-    form.dirtyValues = dirtyValuesInput.value
+    form.dirtyValues = (form.dirtyValuesInput || '')
       .split(/[、,，;；]/)
       .map(v => v.trim())
       .filter(v => v)
@@ -209,10 +209,10 @@ function resetForm() {
   form.columnDescription = ''
   form.standardValue = ''
   form.dirtyValues = []
+  form.dirtyValuesInput = ''
   form.confidence = 1.0
   form.source = 'manual'
   form.autoApply = false
-  dirtyValuesInput.value = ''
 }
 
 function getSourceType(source: string) {
