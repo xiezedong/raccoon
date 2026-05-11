@@ -17,7 +17,7 @@
       show-icon
       style="margin-bottom: 20px"
     >
-      系统将利用大模型自动发现数据库中可能的脏数据，并生成候选规则供您审核。
+      系统将自动扫描目标数据库的所有表和字段，利用大模型发现可能的脏数据，并生成候选规则供您审核。
     </el-alert>
 
     <!-- 统计卡片 -->
@@ -56,40 +56,35 @@
       </el-col>
     </el-row>
 
-    <!-- 发现表单 -->
+    <!-- 发现操作 -->
     <el-card shadow="never">
       <template #header>
-        <span>启动 AI 发现</span>
-      </template>
-
-      <el-form :model="form" label-width="120px" style="max-width: 600px">
-        <el-form-item label="表名" required>
-          <el-input v-model="form.tableName" placeholder="例如: employee_info" />
-        </el-form-item>
-
-        <el-form-item label="字段名" required>
-          <el-input v-model="form.columnName" placeholder="例如: position" />
-        </el-form-item>
-
-        <el-form-item label="字段描述">
-          <el-input 
-            v-model="form.columnDescription" 
-            placeholder="例如: 职位名称（可选，帮助 AI 更好理解）"
-          />
-        </el-form-item>
-
-        <el-form-item>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span>AI 智能发现</span>
           <el-button 
             type="primary" 
             :icon="Search" 
-            @click="handleDiscover"
+            @click="handleDiscoverAll"
             :loading="discovering"
+            size="large"
           >
-            开始发现
+            开始全自动发现
           </el-button>
-          <el-button @click="resetForm">重置</el-button>
-        </el-form-item>
-      </el-form>
+        </div>
+      </template>
+
+      <el-alert
+        title="工作原理"
+        type="info"
+        :closable="false"
+      >
+        <div style="line-height: 1.8">
+          <div>1. 自动扫描目标数据库的所有表和文本类型字段</div>
+          <div>2. 获取每个字段的唯一值，排除已有规则覆盖的数据</div>
+          <div>3. 利用大模型分析识别可能的脏数据（变体、简称、错别字等）</div>
+          <div>4. 生成候选规则供您审核，通过后自动转为正式规则</div>
+        </div>
+      </el-alert>
 
       <!-- 发现进度 -->
       <el-alert
@@ -101,7 +96,7 @@
         style="margin-top: 20px"
       >
         <template #default>
-          <div>这可能需要几分钟时间，请耐心等待...</div>
+          <div>正在扫描数据库并分析，这可能需要较长时间，请耐心等待...</div>
           <el-progress 
             :percentage="100" 
             :indeterminate="true" 
@@ -120,7 +115,7 @@
         style="margin-top: 20px"
       >
         <div>{{ lastResult.message }}</div>
-        <div v-if="lastResult.success">
+        <div v-if="lastResult.success && lastResult.candidateCount > 0">
           发现了 <strong>{{ lastResult.candidateCount }}</strong> 条候选规则
         </div>
       </el-alert>
@@ -224,15 +219,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, List } from '@element-plus/icons-vue'
-import { discover, getPendingRules, reviewRules, getStats } from '@/api/discovery'
+import { discoverAll, getPendingRules, reviewRules, getStats } from '@/api/discovery'
 import type { CandidateRule, DiscoveryResult } from '@/types'
 import Layout from '@/components/Layout.vue'
-
-const form = ref({
-  tableName: '',
-  columnName: '',
-  columnDescription: ''
-})
 
 const discovering = ref(false)
 const lastResult = ref<DiscoveryResult | null>(null)
@@ -276,9 +265,18 @@ async function loadStats() {
   }
 }
 
-async function handleDiscover() {
-  if (!form.value.tableName || !form.value.columnName) {
-    ElMessage.warning('请填写表名和字段名')
+async function handleDiscoverAll() {
+  try {
+    await ElMessageBox.confirm(
+      '系统将自动扫描目标数据库的所有表和字段，这可能需要较长时间。确定开始吗？',
+      '确认发现',
+      {
+        confirmButtonText: '开始发现',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
     return
   }
 
@@ -286,11 +284,11 @@ async function handleDiscover() {
   lastResult.value = null
 
   try {
-    const result = await discover(form.value) as any
+    const result = await discoverAll() as any
     lastResult.value = result
 
     if (result.success) {
-      ElMessage.success(`发现完成！生成了 ${result.candidateCount} 条候选规则`)
+      ElMessage.success(`发现完成！${result.message}`)
       await loadStats()
       
       if (result.candidateCount > 0) {
@@ -318,15 +316,6 @@ async function handleDiscover() {
   } finally {
     discovering.value = false
   }
-}
-
-function resetForm() {
-  form.value = {
-    tableName: '',
-    columnName: '',
-    columnDescription: ''
-  }
-  lastResult.value = null
 }
 
 async function showCandidates() {

@@ -2,7 +2,14 @@ import request from '@/utils/request'
 import type { CandidateRule, DiscoveryResult } from '@/types'
 
 /**
- * 触发 AI 发现
+ * 全自动 AI 发现（扫描所有表和字段）
+ */
+export function discoverAll() {
+  return request.post<DiscoveryResult>('/candidate-rules/discover-all')
+}
+
+/**
+ * 触发 AI 发现（指定表和字段）
  */
 export function discover(data: {
   tableName: string

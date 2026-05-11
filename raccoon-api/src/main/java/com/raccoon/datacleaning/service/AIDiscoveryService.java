@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -30,7 +33,62 @@ public class AIDiscoveryService {
     private final DirtyDataDetector dirtyDataDetector;
     private final CandidateRuleRepository candidateRuleRepository;
     private final SystemConfigService systemConfigService;
+    private final TargetDatabaseService targetDatabaseService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * 全自动发现 - 扫描所有表和字段
+     */
+    @Transactional
+    public DiscoveryResult discoverAll() {
+        log.info("开始全自动 AI 发现");
+        
+        DiscoveryResult result = new DiscoveryResult();
+        result.setTableName("全部表");
+        result.setColumnName("全部字段");
+        result.setStartTime(LocalDateTime.now());
+        
+        try {
+            // 1. 获取目标数据库的所有表和字段
+            List<TableColumn> tableColumns = getTargetTableColumns();
+            log.info("扫描到 {} 个表字段", tableColumns.size());
+            
+            if (tableColumns.isEmpty()) {
+                result.setSuccess(false);
+                result.setMessage("目标数据库中没有找到可分析的表");
+                return result;
+            }
+            
+            // 2. 逐个字段进行发现
+            int totalCandidates = 0;
+            for (TableColumn tc : tableColumns) {
+                try {
+                    log.info("分析字段: {}.{}", tc.getTableName(), tc.getColumnName());
+                    DiscoveryResult fieldResult = discover(tc.getTableName(), tc.getColumnName(), tc.getColumnComment());
+                    if (fieldResult.isSuccess()) {
+                        totalCandidates += fieldResult.getCandidateCount();
+                    }
+                } catch (Exception e) {
+                    log.warn("分析字段失败: {}.{}", tc.getTableName(), tc.getColumnName(), e);
+                    // 继续处理下一个字段
+                }
+            }
+            
+            result.setSuccess(true);
+            result.setCandidateCount(totalCandidates);
+            result.setMessage(String.format("扫描完成，共分析 %d 个字段，发现 %d 条候选规则", 
+                tableColumns.size(), totalCandidates));
+            
+        } catch (Exception e) {
+            log.error("全自动 AI 发现失败", e);
+            result.setSuccess(false);
+            result.setMessage("发现失败: " + e.getMessage());
+        } finally {
+            result.setEndTime(LocalDateTime.now());
+        }
+        
+        return result;
+    }
 
     /**
      * 发现指定表字段的潜在脏数据
@@ -59,15 +117,26 @@ public class AIDiscoveryService {
             List<CleaningRule> existingRules = cleaningRuleService.getRulesByTableAndColumn(tableName, columnName);
             log.info("已有 {} 条清洗规则", existingRules.size());
             
-            // 3. 批量处理，避免上下文过大
+            // 3. 过滤掉已有规则覆盖的值
+            List<DirtyDataDetector.ValueCount> filteredValues = filterExistingRules(uniqueValues, existingRules);
+            log.info("过滤后剩余 {} 个唯一值", filteredValues.size());
+            
+            if (filteredValues.isEmpty()) {
+                result.setSuccess(true);
+                result.setCandidateCount(0);
+                result.setMessage("该字段的所有值都已被现有规则覆盖");
+                return result;
+            }
+            
+            // 4. 批量处理，避免上下文过大
             int batchSize = getBatchSize();
             List<CandidateRule> allCandidates = new ArrayList<>();
             
-            for (int i = 0; i < uniqueValues.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, uniqueValues.size());
-                List<DirtyDataDetector.ValueCount> batch = uniqueValues.subList(i, end);
+            for (int i = 0; i < filteredValues.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, filteredValues.size());
+                List<DirtyDataDetector.ValueCount> batch = filteredValues.subList(i, end);
                 
-                log.info("处理批次 {}/{}", (i / batchSize + 1), (uniqueValues.size() + batchSize - 1) / batchSize);
+                log.info("处理批次 {}/{}", (i / batchSize + 1), (filteredValues.size() + batchSize - 1) / batchSize);
                 
                 List<CandidateRule> batchCandidates = discoverBatch(
                     tableName, columnName, columnDescription, 
@@ -268,6 +337,74 @@ public class AIDiscoveryService {
     }
 
     /**
+     * 获取目标数据库的所有表和字段
+     */
+    private List<TableColumn> getTargetTableColumns() {
+        List<TableColumn> result = new ArrayList<>();
+        
+        try (Connection conn = targetDatabaseService.getTargetConnection()) {
+            // 查询所有用户表的文本类型字段
+            String sql = """
+                SELECT 
+                    t.table_name,
+                    c.column_name,
+                    pgd.description as column_comment
+                FROM information_schema.tables t
+                JOIN information_schema.columns c ON t.table_name = c.table_name
+                LEFT JOIN pg_catalog.pg_statio_all_tables st ON st.relname = t.table_name
+                LEFT JOIN pg_catalog.pg_description pgd ON pgd.objoid = st.relid 
+                    AND pgd.objsubid = c.ordinal_position
+                WHERE t.table_schema = 'public'
+                    AND t.table_type = 'BASE TABLE'
+                    AND c.data_type IN ('character varying', 'varchar', 'text', 'character')
+                ORDER BY t.table_name, c.ordinal_position
+                """;
+            
+            try (PreparedStatement pstmt = conn.prepareStatement(sql);
+                 ResultSet rs = pstmt.executeQuery()) {
+                
+                while (rs.next()) {
+                    TableColumn tc = new TableColumn();
+                    tc.setTableName(rs.getString("table_name"));
+                    tc.setColumnName(rs.getString("column_name"));
+                    tc.setColumnComment(rs.getString("column_comment"));
+                    result.add(tc);
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("获取表字段信息失败", e);
+            throw new RuntimeException("获取表字段信息失败: " + e.getMessage());
+        }
+        
+        return result;
+    }
+
+    /**
+     * 过滤掉已有规则覆盖的值
+     */
+    private List<DirtyDataDetector.ValueCount> filterExistingRules(
+            List<DirtyDataDetector.ValueCount> values,
+            List<CleaningRule> existingRules) {
+        
+        if (existingRules.isEmpty()) {
+            return values;
+        }
+        
+        // 收集所有已知的标准值和错误值
+        Set<String> knownValues = new HashSet<>();
+        for (CleaningRule rule : existingRules) {
+            knownValues.add(rule.getStandardValue());
+            knownValues.addAll(Arrays.asList(rule.getDirtyValues()));
+        }
+        
+        // 过滤掉已知的值
+        return values.stream()
+                .filter(vc -> !knownValues.contains(vc.getValue()))
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 获取批处理大小
      */
     private int getBatchSize() {
@@ -277,6 +414,16 @@ public class AIDiscoveryService {
         } catch (NumberFormatException e) {
             return 50;
         }
+    }
+
+    /**
+     * 表字段信息
+     */
+    @Data
+    public static class TableColumn {
+        private String tableName;
+        private String columnName;
+        private String columnComment;
     }
 
     /**

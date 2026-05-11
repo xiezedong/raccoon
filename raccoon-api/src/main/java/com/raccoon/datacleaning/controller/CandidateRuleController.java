@@ -28,7 +28,16 @@ public class CandidateRuleController {
     private final CleaningRuleService cleaningRuleService;
 
     /**
-     * 触发 AI 发现
+     * 全自动 AI 发现（扫描所有表和字段）
+     */
+    @PostMapping("/discover-all")
+    public ResponseEntity<AIDiscoveryService.DiscoveryResult> discoverAll() {
+        AIDiscoveryService.DiscoveryResult result = aiDiscoveryService.discoverAll();
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 触发 AI 发现（指定表和字段）
      */
     @PostMapping("/discover")
     public ResponseEntity<AIDiscoveryService.DiscoveryResult> discover(@RequestBody DiscoveryRequest request) {
