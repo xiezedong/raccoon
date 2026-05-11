@@ -25,18 +25,31 @@ export interface CleaningRule {
  */
 export interface CandidateRule {
   id?: number
-  ruleId?: number
   tableName: string
   columnName: string
+  columnDescription?: string
   standardValue: string
-  candidateValue: string
+  dirtyValues: string[]
+  reason?: string
   confidence: number
-  affectedCount: number
-  reasoning?: string
+  source: string
   status: 'pending' | 'approved' | 'rejected'
   createdAt?: string
   reviewedAt?: string
   reviewedBy?: string
+}
+
+/**
+ * AI 发现结果
+ */
+export interface DiscoveryResult {
+  tableName: string
+  columnName: string
+  success: boolean
+  message: string
+  candidateCount: number
+  startTime: string
+  endTime: string
 }
 
 /**

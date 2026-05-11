@@ -1,7 +1,10 @@
 package com.raccoon.datacleaning.controller;
 
 import com.raccoon.datacleaning.model.CandidateRule;
+import com.raccoon.datacleaning.model.CleaningRule;
 import com.raccoon.datacleaning.repository.CandidateRuleRepository;
+import com.raccoon.datacleaning.service.AIDiscoveryService;
+import com.raccoon.datacleaning.service.CleaningRuleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +24,21 @@ import java.util.Map;
 public class CandidateRuleController {
 
     private final CandidateRuleRepository candidateRuleRepository;
+    private final AIDiscoveryService aiDiscoveryService;
+    private final CleaningRuleService cleaningRuleService;
+
+    /**
+     * 触发 AI 发现
+     */
+    @PostMapping("/discover")
+    public ResponseEntity<AIDiscoveryService.DiscoveryResult> discover(@RequestBody DiscoveryRequest request) {
+        AIDiscoveryService.DiscoveryResult result = aiDiscoveryService.discover(
+            request.getTableName(),
+            request.getColumnName(),
+            request.getColumnDescription()
+        );
+        return ResponseEntity.ok(result);
+    }
 
     /**
      * 查询待审核的候选规则
@@ -45,12 +63,26 @@ public class CandidateRuleController {
         int rejectedCount = 0;
         
         for (Long id : request.getApprovedIds()) {
-            CandidateRule rule = candidateRuleRepository.findById(id).orElse(null);
-            if (rule != null) {
-                rule.setStatus("approved");
-                rule.setReviewedAt(LocalDateTime.now());
-                rule.setReviewedBy(request.getReviewedBy());
-                candidateRuleRepository.save(rule);
+            CandidateRule candidate = candidateRuleRepository.findById(id).orElse(null);
+            if (candidate != null) {
+                // 通过审核，转为正式规则
+                CleaningRule rule = new CleaningRule();
+                rule.setTableName(candidate.getTableName());
+                rule.setColumnName(candidate.getColumnName());
+                rule.setColumnDescription(candidate.getColumnDescription());
+                rule.setStandardValue(candidate.getStandardValue());
+                rule.setDirtyValues(candidate.getDirtyValues());
+                rule.setSource("ai_discovery");
+                rule.setConfidence(candidate.getConfidence());
+                rule.setAutoApply(false); // 默认不自动应用
+                rule.setCreatedBy(request.getReviewedBy());
+                cleaningRuleService.createRule(rule);
+                
+                // 更新候选规则状态
+                candidate.setStatus("approved");
+                candidate.setReviewedAt(LocalDateTime.now());
+                candidate.setReviewedBy(request.getReviewedBy());
+                candidateRuleRepository.save(candidate);
                 approvedCount++;
             }
         }
@@ -88,6 +120,39 @@ public class CandidateRuleController {
             "rejected", rejectedCount,
             "total", pendingCount + approvedCount + rejectedCount
         ));
+    }
+
+    /**
+     * 发现请求
+     */
+    public static class DiscoveryRequest {
+        private String tableName;
+        private String columnName;
+        private String columnDescription;
+
+        public String getTableName() {
+            return tableName;
+        }
+
+        public void setTableName(String tableName) {
+            this.tableName = tableName;
+        }
+
+        public String getColumnName() {
+            return columnName;
+        }
+
+        public void setColumnName(String columnName) {
+            this.columnName = columnName;
+        }
+
+        public String getColumnDescription() {
+            return columnDescription;
+        }
+
+        public void setColumnDescription(String columnDescription) {
+            this.columnDescription = columnDescription;
+        }
     }
 
     /**

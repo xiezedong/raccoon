@@ -22,29 +22,29 @@ public class CandidateRule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "rule_id")
-    private Long ruleId;
-
     @Column(name = "table_name", nullable = false, length = 100)
     private String tableName;
 
     @Column(name = "column_name", nullable = false, length = 100)
     private String columnName;
 
+    @Column(name = "column_description", columnDefinition = "TEXT")
+    private String columnDescription;
+
     @Column(name = "standard_value", nullable = false)
     private String standardValue;
 
-    @Column(name = "candidate_value", nullable = false)
-    private String candidateValue;
+    @Column(name = "dirty_values", nullable = false, columnDefinition = "TEXT[]")
+    private String[] dirtyValues;
+
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason;
 
     @Column(name = "confidence", nullable = false, precision = 3, scale = 2)
     private BigDecimal confidence;
 
-    @Column(name = "affected_count")
-    private Integer affectedCount = 0;
-
-    @Column(name = "reasoning", columnDefinition = "TEXT")
-    private String reasoning;
+    @Column(name = "source", length = 50)
+    private String source = "ai_discovery";
 
     @Column(name = "status", length = 20)
     private String status = "pending";

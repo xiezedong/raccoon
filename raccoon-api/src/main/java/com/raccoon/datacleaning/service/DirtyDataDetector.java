@@ -7,6 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,52 +25,71 @@ public class DirtyDataDetector {
 
     private final JdbcTemplate jdbcTemplate;
     private final CleaningRuleService cleaningRuleService;
+    private final TargetDatabaseService targetDatabaseService;
 
     /**
-     * 根据规则查询脏数据
+     * 根据规则查询脏数据（从目标数据库）
      */
     public List<DirtyDataRecord> findDirtyData(CleaningRule rule) {
         log.info("查询脏数据: {}.{}", rule.getTableName(), rule.getColumnName());
         
-        try {
-            // 构建动态 SQL
+        List<DirtyDataRecord> records = new ArrayList<>();
+        
+        try (Connection conn = targetDatabaseService.getTargetConnection()) {
             String sql = buildQuerySql(rule);
             
-            // 执行查询
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, (Object[]) rule.getDirtyValues());
-            
-            // 转换结果
-            return rows.stream()
-                    .map(row -> {
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                // 设置参数
+                for (int i = 0; i < rule.getDirtyValues().length; i++) {
+                    pstmt.setString(i + 1, rule.getDirtyValues()[i]);
+                }
+                
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    while (rs.next()) {
                         DirtyDataRecord record = new DirtyDataRecord();
-                        record.setId(((Number) row.get("id")).longValue());
-                        record.setDirtyValue((String) row.get("dirty_value"));
+                        record.setId(rs.getLong("id"));
+                        record.setDirtyValue(rs.getString("dirty_value"));
                         record.setTableName(rule.getTableName());
                         record.setColumnName(rule.getColumnName());
                         record.setStandardValue(rule.getStandardValue());
                         record.setRuleId(rule.getId());
-                        return record;
-                    })
-                    .collect(Collectors.toList());
-                    
+                        records.add(record);
+                    }
+                }
+            }
+            
         } catch (Exception e) {
             log.error("查询脏数据失败", e);
             throw new RuntimeException("查询脏数据失败: " + e.getMessage(), e);
         }
+        
+        return records;
     }
 
     /**
-     * 统计脏数据数量
+     * 统计脏数据数量（从目标数据库）
      */
     public int countDirtyData(CleaningRule rule) {
-        try {
+        try (Connection conn = targetDatabaseService.getTargetConnection()) {
             String sql = buildCountSql(rule);
-            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, (Object[]) rule.getDirtyValues());
-            return count != null ? count : 0;
+            
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                // 设置参数
+                for (int i = 0; i < rule.getDirtyValues().length; i++) {
+                    pstmt.setString(i + 1, rule.getDirtyValues()[i]);
+                }
+                
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt(1);
+                    }
+                }
+            }
         } catch (Exception e) {
             log.error("统计脏数据失败", e);
-            return 0;
         }
+        
+        return 0;
     }
 
     /**
@@ -87,7 +109,7 @@ public class DirtyDataDetector {
     }
 
     /**
-     * 获取字段的所有唯一值
+     * 获取字段的所有唯一值（从目标数据库）
      */
     public List<ValueCount> getUniqueValues(String tableName, String columnName) {
         String sql = String.format("""
@@ -95,38 +117,40 @@ public class DirtyDataDetector {
             FROM %s
             WHERE %s IS NOT NULL
             GROUP BY %s
-            HAVING COUNT(*) > 1
             ORDER BY cnt DESC
             """,
             columnName, tableName, columnName, columnName
         );
         
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+        List<ValueCount> results = new ArrayList<>();
+        
+        try (Connection conn = targetDatabaseService.getTargetConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
             
-            return rows.stream()
-                    .map(row -> {
-                        ValueCount vc = new ValueCount();
-                        vc.setValue((String) row.get("value"));
-                        vc.setCount(((Number) row.get("cnt")).intValue());
-                        return vc;
-                    })
-                    .collect(Collectors.toList());
-                    
+            while (rs.next()) {
+                ValueCount vc = new ValueCount();
+                vc.setValue(rs.getString("value"));
+                vc.setCount(rs.getInt("cnt"));
+                results.add(vc);
+            }
+            
+            log.info("获取到 {} 个唯一值", results.size());
+            
         } catch (Exception e) {
             log.error("获取唯一值失败", e);
-            return new ArrayList<>();
+            throw new RuntimeException("获取唯一值失败: " + e.getMessage(), e);
         }
+        
+        return results;
     }
 
     /**
      * 构建查询 SQL
      */
     private String buildQuerySql(CleaningRule rule) {
-        // 构建 IN 子句的占位符
-        String placeholders = rule.getDirtyValues().length > 0 
-            ? String.join(",", "?".repeat(rule.getDirtyValues().length).split(""))
-            : "?";
+        // 构建占位符
+        String placeholders = String.join(",", "?".repeat(rule.getDirtyValues().length).split(""));
         
         return String.format("""
             SELECT id, %s as dirty_value
@@ -145,9 +169,7 @@ public class DirtyDataDetector {
      * 构建统计 SQL
      */
     private String buildCountSql(CleaningRule rule) {
-        String placeholders = rule.getDirtyValues().length > 0 
-            ? String.join(",", "?".repeat(rule.getDirtyValues().length).split(""))
-            : "?";
+        String placeholders = String.join(",", "?".repeat(rule.getDirtyValues().length).split(""));
         
         return String.format("""
             SELECT COUNT(*)

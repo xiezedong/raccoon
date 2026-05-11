@@ -39,10 +39,4 @@ public interface CandidateRuleRepository extends JpaRepository<CandidateRule, Lo
      * 统计待审核的候选规则数量
      */
     long countByStatus(String status);
-
-    /**
-     * 查询影响记录数最多的待审核规则
-     */
-    @Query("SELECT c FROM CandidateRule c WHERE c.status = :status ORDER BY c.affectedCount DESC")
-    List<CandidateRule> findTopByStatusOrderByAffectedCount(@Param("status") String status);
 }

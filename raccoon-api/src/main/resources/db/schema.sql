@@ -43,14 +43,14 @@ COMMENT ON COLUMN cleaning_rules.success_count IS '成功次数';
 -- 2. 候选规则表
 CREATE TABLE IF NOT EXISTS candidate_rules (
     id BIGSERIAL PRIMARY KEY,
-    rule_id BIGINT REFERENCES cleaning_rules(id) ON DELETE CASCADE,
     table_name VARCHAR(100) NOT NULL,
     column_name VARCHAR(100) NOT NULL,
+    column_description TEXT,
     standard_value VARCHAR(255) NOT NULL,
-    candidate_value VARCHAR(255) NOT NULL,
+    dirty_values TEXT[] NOT NULL,
+    reason TEXT,
     confidence DECIMAL(3,2) NOT NULL,
-    affected_count INT DEFAULT 0,
-    reasoning TEXT,
+    source VARCHAR(50) DEFAULT 'ai_discovery',
     status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reviewed_at TIMESTAMP,
