@@ -3,6 +3,7 @@
     <div class="page-header">
       <h2>规则管理</h2>
       <div class="actions">
+        <el-button :icon="Download" @click="downloadTemplate">下载模板</el-button>
         <el-upload
           :show-file-list="false"
           :before-upload="handleImport"
@@ -94,7 +95,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload } from '@element-plus/icons-vue'
+import { Plus, Upload, Download } from '@element-plus/icons-vue'
 import { getRules, createRule, updateRule, deleteRule, importRules } from '@/api/rule'
 import type { CleaningRule } from '@/types'
 import Layout from '@/components/Layout.vue'
@@ -200,6 +201,59 @@ async function handleImport(file: File) {
     console.error('导入失败', error)
   }
   return false
+}
+
+function downloadTemplate() {
+  // 动态导入 xlsx 库
+  import('xlsx').then((XLSX) => {
+    // 创建模板数据
+    const data = [
+      ['表名', '字段名', '字段描述', '正确值', '错误值', '备注'],
+      ['employees', 'job_title', '职位名称', '高级工程师', '高工、高级工程师（外聘）、高级工程师-外包', '示例数据'],
+      ['employees', 'department', '部门名称', '技术部', '技术部门、tech dept', '示例数据'],
+      ['projects', 'status', '项目状态', '进行中', '正在进行、进行中...', '示例数据']
+    ]
+    
+    // 创建工作簿
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    
+    // 设置列宽
+    ws['!cols'] = [
+      { wch: 15 },  // 表名
+      { wch: 15 },  // 字段名
+      { wch: 20 },  // 字段描述
+      { wch: 15 },  // 正确值
+      { wch: 40 },  // 错误值
+      { wch: 15 }   // 备注
+    ]
+    
+    // 设置表头样式（加粗、背景色）
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '4472C4' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    }
+    
+    // 应用表头样式
+    const headerCells = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1']
+    headerCells.forEach(cell => {
+      if (ws[cell]) {
+        ws[cell].s = headerStyle
+      }
+    })
+    
+    // 创建工作簿
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '规则模板')
+    
+    // 下载文件
+    XLSX.writeFile(wb, '数据清洗规则导入模板.xlsx')
+    
+    ElMessage.success('模板下载成功')
+  }).catch(error => {
+    console.error('下载模板失败', error)
+    ElMessage.error('下载模板失败')
+  })
 }
 
 function resetForm() {
