@@ -43,6 +43,7 @@ COMMENT ON COLUMN cleaning_rules.success_count IS '成功次数';
 -- 2. 候选规则表
 CREATE TABLE IF NOT EXISTS candidate_rules (
     id BIGSERIAL PRIMARY KEY,
+    rule_id BIGINT,
     table_name VARCHAR(100) NOT NULL,
     column_name VARCHAR(100) NOT NULL,
     column_description TEXT,
@@ -54,16 +55,20 @@ CREATE TABLE IF NOT EXISTS candidate_rules (
     status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reviewed_at TIMESTAMP,
-    reviewed_by VARCHAR(100)
+    reviewed_by VARCHAR(100),
+    CONSTRAINT fk_candidate_rules_rule_id FOREIGN KEY (rule_id) 
+        REFERENCES cleaning_rules(id) ON DELETE CASCADE
 );
 
 -- 创建索引
 CREATE INDEX idx_candidate_rules_status ON candidate_rules(status);
 CREATE INDEX idx_candidate_rules_table_column ON candidate_rules(table_name, column_name);
 CREATE INDEX idx_candidate_rules_confidence ON candidate_rules(confidence DESC);
+CREATE INDEX idx_candidate_rules_rule_id ON candidate_rules(rule_id);
 
 -- 添加注释
 COMMENT ON TABLE candidate_rules IS 'AI发现的候选规则表';
+COMMENT ON COLUMN candidate_rules.rule_id IS '关联的正式规则ID（审核通过后）';
 COMMENT ON COLUMN candidate_rules.status IS '状态: pending/approved/rejected';
 
 -- 3. 清洗日志表

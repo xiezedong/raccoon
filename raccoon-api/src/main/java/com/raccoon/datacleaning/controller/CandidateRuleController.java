@@ -85,9 +85,10 @@ public class CandidateRuleController {
                 rule.setConfidence(candidate.getConfidence());
                 rule.setAutoApply(false); // 默认不自动应用
                 rule.setCreatedBy(request.getReviewedBy());
-                cleaningRuleService.createRule(rule);
+                CleaningRule savedRule = cleaningRuleService.createRule(rule);
                 
-                // 更新候选规则状态
+                // 更新候选规则状态，并记录关联的正式规则ID
+                candidate.setRuleId(savedRule.getId());
                 candidate.setStatus("approved");
                 candidate.setReviewedAt(LocalDateTime.now());
                 candidate.setReviewedBy(request.getReviewedBy());
