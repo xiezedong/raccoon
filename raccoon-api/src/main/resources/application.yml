@@ -2,7 +2,7 @@ spring:
   application:
     name: raccoon-api
   
-  # 数据源配置
+  # 数据源配置（系统数据库，存储规则和日志）
   datasource:
     url: jdbc:postgresql://192.168.12.130:5432/raccoon
     username: postgres
@@ -36,49 +36,17 @@ server:
   servlet:
     context-path: /api
 
-# 数据清洗配置
+# 数据清洗配置（默认值，可在系统设置中覆盖）
 data-cleaning:
-  # 自学习配置
-  self-learning:
-    enabled: true
-    # 自动添加规则的置信度阈值
-    auto-add-threshold: 0.95
-    # 自动应用清洗的置信度阈值
-    auto-apply-threshold: 0.98
-    # 定期扫描配置
-    scheduled-scan:
-      enabled: true
-      cron: "0 0 2 * * ?"  # 每天凌晨2点
-    # 每次扫描的最大字段数
-    max-columns-per-scan: 50
-    # 通知配置
-    notification:
-      enabled: true
-      email: admin@example.com
-    # 安全配置
-    safety:
-      # 单次自动清洗的最大记录数
-      max-auto-clean-records: 1000
-      # 需要人工确认的影响记录数阈值
-      manual-confirm-threshold: 100
-  
-  # 大模型配置
+  # 大模型配置（可在系统设置中配置）
   llm:
     api-url: https://api.openai.com/v1/chat/completions
-    api-key: ${LLM_API_KEY:your-api-key-here}
+    api-key: ${LLM_API_KEY:}
     model: gpt-4
     temperature: 0.3
     max-tokens: 2000
-    timeout: 60000  # 60秒
-    # 批处理配置
-    batch-size: 50  # 每批发送给大模型的数量
-  
-  # 向量相似度配置（可选）
-  vector:
-    enabled: false
-    embedding-model: text-embedding-ada-002
-    embedding-api-url: https://api.openai.com/v1/embeddings
-    similarity-threshold: 0.7
+    timeout: 60000
+    batch-size: 50
 
 # 日志配置
 logging:
@@ -89,3 +57,4 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+

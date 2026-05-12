@@ -4,6 +4,7 @@ import com.raccoon.datacleaning.model.SystemConfig;
 import com.raccoon.datacleaning.repository.SystemConfigRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 public class SystemConfigService {
 
     private final SystemConfigRepository systemConfigRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 获取所有配置
@@ -77,8 +79,21 @@ public class SystemConfigService {
      */
     @Transactional
     public void batchUpdateConfigs(Map<String, String> configs, String updatedBy) {
+        boolean needReschedule = false;
+        
         for (Map.Entry<String, String> entry : configs.entrySet()) {
             updateConfig(entry.getKey(), entry.getValue(), updatedBy);
+            
+            // 检查是否需要重新调度
+            if (entry.getKey().startsWith("ai_discovery.scheduled.")) {
+                needReschedule = true;
+            }
+        }
+        
+        // 如果定时发现配置变更，发布事件
+        if (needReschedule) {
+            log.info("定时发现配置已变更，将重新调度任务");
+            eventPublisher.publishEvent(new ScheduleConfigChangedEvent(this));
         }
     }
 
@@ -122,6 +137,29 @@ public class SystemConfigService {
         // 安全配置
         setDefaultConfig("safety.max_auto_clean_records", "1000", "单次自动清洗的最大记录数");
         setDefaultConfig("safety.manual_confirm_threshold", "100", "需要人工确认的影响记录数阈值");
+        
+        // 定时 AI 发现配置
+        setDefaultConfig("ai_discovery.scheduled.enabled", "false", "是否启用定时AI发现");
+        setDefaultConfig("ai_discovery.scheduled.preset", "disabled", "预设时间");
+        setDefaultConfig("ai_discovery.scheduled.cron", "0 0 2 * * ?", "自定义Cron表达式");
+        setDefaultConfig("ai_discovery.scheduled.min_interval_hours", "6", "最小执行间隔（小时）");
+        setDefaultConfig("ai_discovery.scheduled.timeout_hours", "2", "超时时间（小时）");
+        setDefaultConfig("ai_discovery.scheduled.max_fields_per_run", "50", "单次最大扫描字段数");
+    }
+
+    /**
+     * 配置变更事件
+     */
+    public static class ScheduleConfigChangedEvent {
+        private final Object source;
+        
+        public ScheduleConfigChangedEvent(Object source) {
+            this.source = source;
+        }
+        
+        public Object getSource() {
+            return source;
+        }
     }
 
     /**

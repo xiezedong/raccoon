@@ -50,3 +50,23 @@ export function getStats() {
     total: number
   }>('/candidate-rules/stats')
 }
+
+/**
+ * 获取定时任务状态
+ */
+export function getScheduleStatus() {
+  return request.get<{
+    enabled: boolean
+    running: boolean
+    scheduled: boolean
+    lastExecutionTime: string
+    cronExpression: string
+  }>('/scheduled-discovery/status')
+}
+
+/**
+ * 手动触发定时任务
+ */
+export function triggerSchedule() {
+  return request.post('/scheduled-discovery/trigger')
+}

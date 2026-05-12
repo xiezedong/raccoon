@@ -201,6 +201,68 @@
               />
               <span class="form-tip">置信度超过此值自动执行清洗</span>
             </el-form-item>
+
+            <el-divider content-position="left">定时 AI 发现</el-divider>
+
+            <el-form-item label="启用定时 AI 发现">
+              <el-switch v-model="scheduledDiscoveryEnabled" />
+              <span class="form-tip">启用后系统将自动定期扫描发现脏数据</span>
+            </el-form-item>
+
+            <el-form-item label="执行时间" v-if="scheduledDiscoveryEnabled">
+              <el-select v-model="scheduledPreset" placeholder="请选择执行时间" style="width: 300px">
+                <el-option label="每天凌晨 2:00" value="daily_2am" />
+                <el-option label="每天凌晨 3:00" value="daily_3am" />
+                <el-option label="每周日凌晨 2:00" value="weekly_sunday" />
+                <el-option label="每周一凌晨 2:00" value="weekly_monday" />
+                <el-option label="每月1号凌晨 2:00" value="monthly_1st" />
+                <el-option label="自定义 Cron 表达式" value="custom" />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="Cron 表达式" v-if="scheduledDiscoveryEnabled && scheduledPreset === 'custom'">
+              <el-input 
+                v-model="configs['ai_discovery.scheduled.cron']" 
+                placeholder="0 0 2 * * ?"
+                style="width: 300px"
+              />
+              <span class="form-tip">
+                <a href="https://cron.qqe2.com/" target="_blank" style="color: #409eff">Cron 表达式生成器</a>
+              </span>
+            </el-form-item>
+
+            <el-form-item label="最小执行间隔" v-if="scheduledDiscoveryEnabled">
+              <el-input-number
+                v-model="minIntervalHoursValue"
+                :min="1"
+                :max="24"
+              />
+              <span style="margin-left: 10px">小时</span>
+              <span class="form-tip">防止频繁执行，保护系统资源</span>
+            </el-form-item>
+
+            <el-form-item label="单次最大扫描字段数" v-if="scheduledDiscoveryEnabled">
+              <el-input-number
+                v-model="maxFieldsPerRunValue"
+                :min="10"
+                :max="200"
+                :step="10"
+              />
+              <span class="form-tip">限制单次扫描范围，避免执行时间过长</span>
+            </el-form-item>
+
+            <el-alert
+              v-if="scheduledDiscoveryEnabled"
+              title="注意事项"
+              type="warning"
+              :closable="false"
+            >
+              <div style="line-height: 1.8;">
+                <div>• 定时任务会消耗大模型 API 配额，请合理设置执行频率</div>
+                <div>• 建议在业务低峰期执行（如凌晨）</div>
+                <div>• 首次使用建议先手动执行测试</div>
+              </div>
+            </el-alert>
           </el-form>
         </el-tab-pane>
 
@@ -318,6 +380,27 @@ const maxAutoCleanValue = computed({
 const manualConfirmValue = computed({
   get: () => parseInt(configs.value['safety.manual_confirm_threshold'] || '100'),
   set: (val) => configs.value['safety.manual_confirm_threshold'] = val.toString()
+})
+
+// 定时 AI 发现配置
+const scheduledDiscoveryEnabled = computed({
+  get: () => configs.value['ai_discovery.scheduled.enabled'] === 'true',
+  set: (val) => configs.value['ai_discovery.scheduled.enabled'] = val.toString()
+})
+
+const scheduledPreset = computed({
+  get: () => configs.value['ai_discovery.scheduled.preset'] || 'disabled',
+  set: (val) => configs.value['ai_discovery.scheduled.preset'] = val
+})
+
+const minIntervalHoursValue = computed({
+  get: () => parseInt(configs.value['ai_discovery.scheduled.min_interval_hours'] || '6'),
+  set: (val) => configs.value['ai_discovery.scheduled.min_interval_hours'] = val.toString()
+})
+
+const maxFieldsPerRunValue = computed({
+  get: () => parseInt(configs.value['ai_discovery.scheduled.max_fields_per_run'] || '50'),
+  set: (val) => configs.value['ai_discovery.scheduled.max_fields_per_run'] = val.toString()
 })
 
 onMounted(async () => {
