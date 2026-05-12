@@ -2,8 +2,14 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
+// 获取运行时配置的 API 地址
+const getBaseURL = () => {
+  // @ts-ignore
+  return window.__APP_CONFIG__?.apiBaseUrl || '/api'
+}
+
 const service: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   timeout: 60000
 })
 
