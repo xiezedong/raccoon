@@ -19,6 +19,21 @@
             <span class="nav-text">{{ item.label }}</span>
           </router-link>
         </nav>
+
+        <!-- 页脚 -->
+        <div class="sidebar-footer">
+          <div class="powered-by">
+            Powered by
+          </div>
+          <div class="team-members">
+            <span class="member">李佳潞</span>
+            <span class="separator">·</span>
+            <span class="member">谢泽东</span>
+            <span class="separator">·</span>
+            <span class="member">叶紫薇</span>
+          </div>
+          <div class="version">v1.0.0</div>
+        </div>
       </el-aside>
 
       <!-- 主内容区 -->
@@ -126,6 +141,24 @@ const currentPageTitle = computed(() => {
   gap: 8px;
   position: relative;
   z-index: 1;
+  overflow-y: auto;
+}
+
+.nav-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-menu::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .nav-item {
@@ -184,6 +217,54 @@ const currentPageTitle = computed(() => {
 
 .nav-text {
   flex: 1;
+}
+
+/* 页脚 */
+.sidebar-footer {
+  padding: 20px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.powered-by {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.team-members {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.member {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transition: all 0.3s ease;
+}
+
+.separator {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.version {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'Courier New', monospace;
 }
 
 /* 主容器 */
