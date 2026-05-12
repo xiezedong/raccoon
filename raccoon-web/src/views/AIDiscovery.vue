@@ -96,8 +96,16 @@
         style="margin-top: 20px"
       >
         <template #default>
-          <div>正在扫描数据库并分析，这可能需要较长时间，请耐心等待...</div>
+          <div v-if="lastResult">{{ lastResult.message }}</div>
+          <div v-else>正在扫描数据库并分析，这可能需要较长时间，请耐心等待...</div>
           <el-progress 
+            v-if="lastResult && lastResult.candidateCount !== undefined"
+            :percentage="getProgress()" 
+            :indeterminate="false"
+            style="margin-top: 10px"
+          />
+          <el-progress 
+            v-else
             :percentage="100" 
             :indeterminate="true" 
             style="margin-top: 10px"
@@ -274,7 +282,7 @@ async function loadStats() {
 async function handleDiscoverAll() {
   try {
     await ElMessageBox.confirm(
-      '系统将自动扫描目标数据库的所有表和字段，这可能需要较长时间。确定开始吗？',
+      '系统将自动扫描目标数据库的所有表和字段，这可能需要较长时间。任务将在后台执行，您可以随时查看进度。确定开始吗？',
       '确认发现',
       {
         confirmButtonText: '开始发现',
@@ -290,38 +298,100 @@ async function handleDiscoverAll() {
   lastResult.value = null
 
   try {
-    const result = await discoverAll() as any
-    lastResult.value = result
+    // 调用异步接口
+    const response = await fetch('/api/candidate-rules/discover-all-async', {
+      method: 'POST'
+    })
+    const result = await response.json()
 
-    if (result.success) {
-      ElMessage.success(`发现完成！${result.message}`)
-      await loadStats()
+    if (result.success && result.taskId) {
+      ElMessage.success('AI 发现任务已启动，正在后台执行')
       
-      if (result.candidateCount > 0) {
-        // 询问是否立即审核
-        ElMessageBox.confirm(
-          `已发现 ${result.candidateCount} 条候选规则，是否立即审核？`,
-          '提示',
-          {
-            confirmButtonText: '立即审核',
-            cancelButtonText: '稍后审核',
-            type: 'success'
-          }
-        ).then(() => {
-          showCandidates()
-        }).catch(() => {
-          // 用户选择稍后审核
-        })
-      }
+      // 开始轮询任务状态
+      pollTaskStatus(result.taskId)
     } else {
-      ElMessage.error(result.message || '发现失败')
+      ElMessage.error('启动任务失败')
+      discovering.value = false
     }
   } catch (error: any) {
-    console.error('AI 发现失败', error)
-    ElMessage.error(error.message || 'AI 发现失败')
-  } finally {
+    console.error('启动 AI 发现失败', error)
+    ElMessage.error(error.message || '启动 AI 发现失败')
     discovering.value = false
   }
+}
+
+// 轮询任务状态
+let pollTimer: any = null
+async function pollTaskStatus(taskId: number) {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
+
+  pollTimer = setInterval(async () => {
+    try {
+      const response = await fetch(`/api/candidate-rules/task/${taskId}`)
+      const task = await response.json()
+
+      if (task.status === 'running') {
+        // 更新进度信息
+        const progress = task.totalFields > 0 
+          ? Math.round((task.processedFields / task.totalFields) * 100) 
+          : 0
+        
+        lastResult.value = {
+          success: true,
+          message: `正在分析 ${task.currentTable}.${task.currentColumn} (${task.processedFields}/${task.totalFields})`,
+          candidateCount: task.candidatesFound
+        }
+      } else if (task.status === 'completed') {
+        // 任务完成
+        clearInterval(pollTimer)
+        discovering.value = false
+        
+        lastResult.value = {
+          success: true,
+          message: `发现完成！共分析 ${task.totalFields} 个字段，发现 ${task.candidatesFound} 条候选规则`,
+          candidateCount: task.candidatesFound
+        }
+        
+        await loadStats()
+        
+        if (task.candidatesFound > 0) {
+          ElMessageBox.confirm(
+            `已发现 ${task.candidatesFound} 条候选规则，是否立即审核？`,
+            '提示',
+            {
+              confirmButtonText: '立即审核',
+              cancelButtonText: '稍后审核',
+              type: 'success'
+            }
+          ).then(() => {
+            showCandidates()
+          }).catch(() => {})
+        }
+      } else if (task.status === 'failed') {
+        // 任务失败
+        clearInterval(pollTimer)
+        discovering.value = false
+        
+        lastResult.value = {
+          success: false,
+          message: task.errorMessage || '发现失败',
+          candidateCount: 0
+        }
+        
+        ElMessage.error(task.errorMessage || '发现失败')
+      } else if (task.status === 'cancelled') {
+        // 任务取消
+        clearInterval(pollTimer)
+        discovering.value = false
+        
+        ElMessage.info('任务已取消')
+      }
+    } catch (error) {
+      console.error('获取任务状态失败', error)
+    }
+  }, 2000) // 每2秒轮询一次
 }
 
 async function showCandidates() {
@@ -426,6 +496,17 @@ function getRowClassName({ row }: { row: CandidateRule }) {
 
 function isSelectable(row: CandidateRule) {
   return !row.isDuplicate
+}
+
+function getProgress() {
+  if (!lastResult.value) return 0
+  const match = lastResult.value.message.match(/\((\d+)\/(\d+)\)/)
+  if (match) {
+    const processed = parseInt(match[1])
+    const total = parseInt(match[2])
+    return Math.round((processed / total) * 100)
+  }
+  return 0
 }
 </script>
 

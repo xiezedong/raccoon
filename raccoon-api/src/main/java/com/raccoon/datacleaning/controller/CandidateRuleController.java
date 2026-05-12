@@ -2,6 +2,7 @@ package com.raccoon.datacleaning.controller;
 
 import com.raccoon.datacleaning.model.CandidateRule;
 import com.raccoon.datacleaning.model.CleaningRule;
+import com.raccoon.datacleaning.model.DiscoveryTask;
 import com.raccoon.datacleaning.repository.CandidateRuleRepository;
 import com.raccoon.datacleaning.service.AIDiscoveryService;
 import com.raccoon.datacleaning.service.CleaningRuleService;
@@ -28,7 +29,54 @@ public class CandidateRuleController {
     private final CleaningRuleService cleaningRuleService;
 
     /**
-     * 全自动 AI 发现（扫描所有表和字段）
+     * 全自动 AI 发现（扫描所有表和字段）- 异步版本
+     */
+    @PostMapping("/discover-all-async")
+    public ResponseEntity<Map<String, Object>> discoverAllAsync(
+            @RequestParam(required = false, defaultValue = "system") String createdBy) {
+        Long taskId = aiDiscoveryService.discoverAllAsync(createdBy);
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "taskId", taskId,
+            "message", "AI 发现任务已启动，正在后台执行"
+        ));
+    }
+    
+    /**
+     * 获取任务状态
+     */
+    @GetMapping("/task/{taskId}")
+    public ResponseEntity<DiscoveryTask> getTaskStatus(@PathVariable Long taskId) {
+        DiscoveryTask task = aiDiscoveryService.getTaskStatus(taskId);
+        if (task == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(task);
+    }
+    
+    /**
+     * 获取最近的任务列表
+     */
+    @GetMapping("/tasks")
+    public ResponseEntity<List<DiscoveryTask>> getRecentTasks() {
+        List<DiscoveryTask> tasks = aiDiscoveryService.getRecentTasks();
+        return ResponseEntity.ok(tasks);
+    }
+    
+    /**
+     * 取消任务
+     */
+    @PostMapping("/task/{taskId}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelTask(@PathVariable Long taskId) {
+        boolean success = aiDiscoveryService.cancelTask(taskId);
+        return ResponseEntity.ok(Map.of(
+            "success", success,
+            "message", success ? "任务已取消" : "任务无法取消"
+        ));
+    }
+
+    /**
+     * 全自动 AI 发现（扫描所有表和字段）- 同步版本（保留兼容）
      */
     @PostMapping("/discover-all")
     public ResponseEntity<AIDiscoveryService.DiscoveryResult> discoverAll() {

@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.raccoon.datacleaning.model.CandidateRule;
 import com.raccoon.datacleaning.model.CleaningRule;
+import com.raccoon.datacleaning.model.DiscoveryTask;
 import com.raccoon.datacleaning.repository.CandidateRuleRepository;
+import com.raccoon.datacleaning.repository.DiscoveryTaskRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,16 +35,17 @@ public class AIDiscoveryService {
     private final CleaningRuleService cleaningRuleService;
     private final DirtyDataDetector dirtyDataDetector;
     private final CandidateRuleRepository candidateRuleRepository;
+    private final DiscoveryTaskRepository discoveryTaskRepository;
     private final SystemConfigService systemConfigService;
     private final TargetDatabaseService targetDatabaseService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 全自动发现 - 扫描所有表和字段
+     * 全自动发现 - 扫描所有表和字段（同步版本，用于兼容）
      */
     @Transactional
     public DiscoveryResult discoverAll() {
-        log.info("开始全自动 AI 发现");
+        log.info("开始全自动 AI 发现（同步）");
         
         DiscoveryResult result = new DiscoveryResult();
         result.setTableName("全部表");
@@ -88,6 +92,141 @@ public class AIDiscoveryService {
         }
         
         return result;
+    }
+    
+    /**
+     * 全自动发现 - 异步版本
+     */
+    public Long discoverAllAsync(String createdBy) {
+        // 创建任务记录
+        DiscoveryTask task = new DiscoveryTask();
+        task.setTaskName("全自动 AI 发现");
+        task.setStatus("pending");
+        task.setCreatedBy(createdBy);
+        task = discoveryTaskRepository.save(task);
+        
+        // 异步执行
+        Long taskId = task.getId();
+        executeDiscoveryAsync(taskId);
+        
+        return taskId;
+    }
+    
+    /**
+     * 异步执行发现任务
+     */
+    @Async
+    public void executeDiscoveryAsync(Long taskId) {
+        DiscoveryTask task = discoveryTaskRepository.findById(taskId).orElse(null);
+        if (task == null) {
+            log.error("任务不存在: {}", taskId);
+            return;
+        }
+        
+        log.info("开始执行异步发现任务: {}", taskId);
+        
+        try {
+            // 更新任务状态为运行中
+            task.setStatus("running");
+            task.setStartedAt(LocalDateTime.now());
+            discoveryTaskRepository.save(task);
+            
+            // 1. 获取目标数据库的所有表和字段
+            List<TableColumn> tableColumns = getTargetTableColumns();
+            log.info("扫描到 {} 个表字段", tableColumns.size());
+            
+            if (tableColumns.isEmpty()) {
+                task.setStatus("completed");
+                task.setCompletedAt(LocalDateTime.now());
+                task.setErrorMessage("目标数据库中没有找到可分析的表");
+                discoveryTaskRepository.save(task);
+                return;
+            }
+            
+            task.setTotalFields(tableColumns.size());
+            discoveryTaskRepository.save(task);
+            
+            // 2. 逐个字段进行发现
+            int totalCandidates = 0;
+            int processedCount = 0;
+            
+            for (TableColumn tc : tableColumns) {
+                try {
+                    // 更新当前处理的字段
+                    task.setCurrentTable(tc.getTableName());
+                    task.setCurrentColumn(tc.getColumnName());
+                    task.setProcessedFields(processedCount);
+                    discoveryTaskRepository.save(task);
+                    
+                    log.info("分析字段 [{}/{}]: {}.{}", 
+                        processedCount + 1, tableColumns.size(), 
+                        tc.getTableName(), tc.getColumnName());
+                    
+                    DiscoveryResult fieldResult = discover(tc.getTableName(), tc.getColumnName(), tc.getColumnComment());
+                    if (fieldResult.isSuccess()) {
+                        totalCandidates += fieldResult.getCandidateCount();
+                    }
+                    
+                    processedCount++;
+                    
+                } catch (Exception e) {
+                    log.warn("分析字段失败: {}.{}", tc.getTableName(), tc.getColumnName(), e);
+                    processedCount++;
+                    // 继续处理下一个字段
+                }
+            }
+            
+            // 任务完成
+            task.setStatus("completed");
+            task.setCompletedAt(LocalDateTime.now());
+            task.setProcessedFields(processedCount);
+            task.setCandidatesFound(totalCandidates);
+            discoveryTaskRepository.save(task);
+            
+            log.info("异步发现任务完成: taskId={}, 处理字段数={}, 发现候选规则数={}", 
+                taskId, processedCount, totalCandidates);
+            
+        } catch (Exception e) {
+            log.error("异步发现任务失败: taskId={}", taskId, e);
+            task.setStatus("failed");
+            task.setCompletedAt(LocalDateTime.now());
+            task.setErrorMessage(e.getMessage());
+            discoveryTaskRepository.save(task);
+        }
+    }
+    
+    /**
+     * 获取任务状态
+     */
+    public DiscoveryTask getTaskStatus(Long taskId) {
+        return discoveryTaskRepository.findById(taskId).orElse(null);
+    }
+    
+    /**
+     * 获取最近的任务列表
+     */
+    public List<DiscoveryTask> getRecentTasks() {
+        return discoveryTaskRepository.findTop10ByOrderByCreatedAtDesc();
+    }
+    
+    /**
+     * 取消任务
+     */
+    @Transactional
+    public boolean cancelTask(Long taskId) {
+        DiscoveryTask task = discoveryTaskRepository.findById(taskId).orElse(null);
+        if (task == null) {
+            return false;
+        }
+        
+        if ("pending".equals(task.getStatus()) || "running".equals(task.getStatus())) {
+            task.setStatus("cancelled");
+            task.setCompletedAt(LocalDateTime.now());
+            discoveryTaskRepository.save(task);
+            return true;
+        }
+        
+        return false;
     }
 
     /**
