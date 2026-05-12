@@ -352,7 +352,8 @@
             show-icon
             style="margin-bottom: 20px"
           >
-            自定义 AI 发现功能的提示词模板，留空则使用默认提示词。支持占位符：{{tableName}}, {{columnName}}, {{columnDescription}}, {{existingRules}}, {{values}}
+            <div>自定义 AI 发现功能的提示词模板，留空则使用默认提示词。</div>
+            <div style="margin-top: 8px;">支持占位符：<code>&#123;&#123;tableName&#125;&#125;</code>, <code>&#123;&#123;columnName&#125;&#125;</code>, <code>&#123;&#123;columnDescription&#125;&#125;</code>, <code>&#123;&#123;existingRules&#125;&#125;</code>, <code>&#123;&#123;values&#125;&#125;</code></div>
           </el-alert>
 
           <el-form :model="configs" label-width="120px" class="config-form">
@@ -382,11 +383,11 @@
             :closable="false"
           >
             <div style="line-height: 1.8;">
-              <div><strong>{{tableName}}</strong> - 表名</div>
-              <div><strong>{{columnName}}</strong> - 字段名</div>
-              <div><strong>{{columnDescription}}</strong> - 字段描述</div>
-              <div><strong>{{existingRules}}</strong> - 已有清洗规则列表</div>
-              <div><strong>{{values}}</strong> - 字段的唯一值列表</div>
+              <div><strong><code>&#123;&#123;tableName&#125;&#125;</code></strong> - 表名</div>
+              <div><strong><code>&#123;&#123;columnName&#125;&#125;</code></strong> - 字段名</div>
+              <div><strong><code>&#123;&#123;columnDescription&#125;&#125;</code></strong> - 字段描述</div>
+              <div><strong><code>&#123;&#123;existingRules&#125;&#125;</code></strong> - 已有清洗规则列表</div>
+              <div><strong><code>&#123;&#123;values&#125;&#125;</code></strong> - 字段的唯一值列表</div>
             </div>
           </el-alert>
         </el-tab-pane>

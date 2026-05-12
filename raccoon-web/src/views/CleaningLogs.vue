@@ -248,7 +248,7 @@ async function loadData() {
   loading.value = true
   try {
     // 加载统计信息
-    const stats = await getStatistics() as LogStatistics
+    const stats = await getStatistics() as unknown as LogStatistics
     Object.assign(statistics, stats)
     
     // 根据当前标签页加载数据
@@ -266,11 +266,11 @@ async function loadData() {
 }
 
 async function loadTasks() {
-  tasks.value = await getAllTasks() as CleaningTask[]
+  tasks.value = await getAllTasks() as unknown as CleaningTask[]
 }
 
 async function loadLogs() {
-  logs.value = await getRecentLogs(100) as CleaningLog[]
+  logs.value = await getRecentLogs(100) as unknown as CleaningLog[]
 }
 
 function handleTabChange(tabName: string) {
@@ -287,7 +287,7 @@ async function handleViewLogs(task: CleaningTask) {
   taskLogsLoading.value = true
   
   try {
-    taskLogs.value = await getLogsByTaskId(task.id) as CleaningLog[]
+    taskLogs.value = await getLogsByTaskId(task.id) as unknown as CleaningLog[]
   } catch (error) {
     console.error('加载任务日志失败', error)
     ElMessage.error('加载任务日志失败')

@@ -409,7 +409,7 @@ onMounted(() => {
 async function loadPendingScans() {
   loading.value = true
   try {
-    const scans = await getPendingScans() as DirtyDataScan[]
+    const scans = await getPendingScans() as unknown as DirtyDataScan[]
     
     dirtyDataList.value = scans.map(scan => ({
       id: scan.id,
@@ -438,7 +438,7 @@ async function scanDirtyData() {
   try {
     ElMessage.info('开始扫描...')
     
-    const result = await scanAllRules('user') as ScanResult
+    const result = await scanAllRules('user') as unknown as ScanResult
     
     ElMessage.success(result.message)
     
@@ -459,7 +459,7 @@ async function handlePreview(item: DirtyDataItem) {
   previewLoading.value = true
   
   try {
-    preview.value = await previewClean(item.ruleId) as CleaningPreview
+    preview.value = await previewClean(item.ruleId) as unknown as CleaningPreview
   } catch (error) {
     console.error('预览失败', error)
     ElMessage.error('预览失败')
@@ -492,7 +492,7 @@ async function handleExecute(item: DirtyDataItem) {
     
     // 执行清洗
     executingRuleId.value = item.ruleId
-    const cleanResult = await executeClean(item.ruleId, 'user') as CleaningResult
+    const cleanResult = await executeClean(item.ruleId, 'user') as unknown as CleaningResult
     
     // 检查是否需要二次确认
     if (cleanResult.needConfirm) {
@@ -522,7 +522,7 @@ async function confirmExecute() {
   
   executing.value = true
   try {
-    const cleanResult = await executeClean(currentRule.value.ruleId, 'user') as CleaningResult
+    const cleanResult = await executeClean(currentRule.value.ruleId, 'user') as unknown as CleaningResult
     
     previewVisible.value = false
     result.value = cleanResult
@@ -564,7 +564,7 @@ async function handleBatchExecute() {
     
     ElMessage.info('批量执行中，请稍候...')
     
-    const result = await executeBatchClean(ruleIds, 'user') as BatchCleaningResult
+    const result = await executeBatchClean(ruleIds, 'user') as unknown as BatchCleaningResult
     
     batchResult.value = result
     batchResultVisible.value = true

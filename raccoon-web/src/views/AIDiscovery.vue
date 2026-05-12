@@ -341,8 +341,12 @@ async function pollTaskStatus(taskId: number) {
         lastResult.value = {
           success: true,
           message: `正在分析 ${task.currentTable}.${task.currentColumn} (${task.processedFields}/${task.totalFields})`,
-          candidateCount: task.candidatesFound
-        }
+          candidateCount: task.candidatesFound,
+          tableName: '',
+          columnName: '',
+          startTime: '',
+          endTime: ''
+        } as any
       } else if (task.status === 'completed') {
         // 任务完成
         clearInterval(pollTimer)
@@ -351,8 +355,12 @@ async function pollTaskStatus(taskId: number) {
         lastResult.value = {
           success: true,
           message: `发现完成！共分析 ${task.totalFields} 个字段，发现 ${task.candidatesFound} 条候选规则`,
-          candidateCount: task.candidatesFound
-        }
+          candidateCount: task.candidatesFound,
+          tableName: '',
+          columnName: '',
+          startTime: '',
+          endTime: ''
+        } as any
         
         await loadStats()
         
@@ -377,8 +385,12 @@ async function pollTaskStatus(taskId: number) {
         lastResult.value = {
           success: false,
           message: task.errorMessage || '发现失败',
-          candidateCount: 0
-        }
+          candidateCount: 0,
+          tableName: '',
+          columnName: '',
+          startTime: '',
+          endTime: ''
+        } as any
         
         ElMessage.error(task.errorMessage || '发现失败')
       } else if (task.status === 'cancelled') {
