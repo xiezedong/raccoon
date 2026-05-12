@@ -53,8 +53,8 @@
         <el-card shadow="hover" class="stat-card">
           <div style="text-align: center">
             <el-button 
-              type="danger" 
-              :icon="Delete"
+              type="primary" 
+              :icon="Operation"
               @click="handleBatchExecute"
               :disabled="selectedRules.length === 0"
               :loading="batchExecuting"
@@ -110,7 +110,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
               <el-button 
                 size="small" 
@@ -127,6 +127,15 @@
                 :loading="executingRuleId === row.ruleId"
               >
                 执行
+              </el-button>
+              <el-button 
+                size="small" 
+                type="danger"
+                :icon="Delete"
+                @click="handleDelete(row)"
+                :loading="deletingId === row.id"
+              >
+                删除
               </el-button>
             </template>
           </el-table-column>
@@ -323,7 +332,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, View, Check, Delete, Clock, Right, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { Refresh, View, Check, Delete, Clock, Right, CircleCheck, CircleClose, Operation } from '@element-plus/icons-vue'
 import { getRules } from '@/api/rule'
 import { previewClean, executeClean, executeBatchClean, scanAllRules, getPendingScans, deleteScan } from '@/api/cleaning'
 import type { CleaningRule, CleaningPreview, CleaningResult, DirtyDataScan, ScanResult } from '@/types'
@@ -361,6 +370,7 @@ const previewLoading = ref(false)
 const preview = ref<CleaningPreview | null>(null)
 const executing = ref(false)
 const executingRuleId = ref<number | null>(null)
+const deletingId = ref<number | null>(null)
 const resultVisible = ref(false)
 const result = ref<CleaningResult | null>(null)
 const currentRule = ref<DirtyDataItem | null>(null)
@@ -597,6 +607,37 @@ function calculateDuration(startTime: string, endTime: string) {
     const minutes = Math.floor(duration / 60)
     const seconds = duration % 60
     return `${minutes} 分 ${seconds} 秒`
+  }
+}
+
+async function handleDelete(item: DirtyDataItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除这条扫描记录吗？删除后需要重新扫描才能再次显示。`,
+      '确认删除',
+      {
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消'
+      }
+    )
+    
+    deletingId.value = item.id
+    
+    await deleteScan(item.id)
+    
+    ElMessage.success('删除成功')
+    
+    // 从列表中移除
+    dirtyDataList.value = dirtyDataList.value.filter(d => d.id !== item.id)
+    
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('删除失败', error)
+      ElMessage.error('删除失败')
+    }
+  } finally {
+    deletingId.value = null
   }
 }
 </script>
