@@ -117,6 +117,29 @@ public class DirtyDataScanService {
     public void deleteScan(Long scanId) {
         dirtyDataScanRepository.deleteById(scanId);
     }
+    
+    /**
+     * 批量删除扫描结果
+     */
+    @Transactional
+    public int batchDeleteScans(List<Long> scanIds) {
+        if (scanIds == null || scanIds.isEmpty()) {
+            return 0;
+        }
+        
+        int deletedCount = 0;
+        for (Long scanId : scanIds) {
+            try {
+                dirtyDataScanRepository.deleteById(scanId);
+                deletedCount++;
+            } catch (Exception e) {
+                log.error("删除扫描结果失败: scanId={}", scanId, e);
+            }
+        }
+        
+        log.info("批量删除扫描结果: 总数={}, 成功={}", scanIds.size(), deletedCount);
+        return deletedCount;
+    }
 
     /**
      * 清理旧的扫描结果（保留最近7天）

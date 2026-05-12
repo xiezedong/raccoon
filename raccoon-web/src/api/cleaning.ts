@@ -80,3 +80,10 @@ export function getRecentScans() {
 export function deleteScan(scanId: number) {
   return request.delete(`/cleaning/scans/${scanId}`)
 }
+
+/**
+ * 批量删除扫描结果
+ */
+export function batchDeleteScans(scanIds: number[]) {
+  return request.delete('/cleaning/scans/batch', { data: scanIds })
+}

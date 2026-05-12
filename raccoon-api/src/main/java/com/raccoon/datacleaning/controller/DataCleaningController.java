@@ -138,4 +138,17 @@ public class DataCleaningController {
         dirtyDataScanService.deleteScan(scanId);
         return ResponseEntity.ok(Map.of("success", true, "message", "删除成功"));
     }
+    
+    /**
+     * 批量删除扫描结果
+     */
+    @DeleteMapping("/scans/batch")
+    public ResponseEntity<Map<String, Object>> batchDeleteScans(@RequestBody List<Long> scanIds) {
+        int deletedCount = dirtyDataScanService.batchDeleteScans(scanIds);
+        return ResponseEntity.ok(Map.of(
+            "success", true, 
+            "message", "批量删除成功",
+            "deletedCount", deletedCount
+        ));
+    }
 }

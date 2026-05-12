@@ -20,7 +20,7 @@
 
     <!-- 统计信息 -->
     <el-row :gutter="20" style="margin-bottom: 20px" v-if="dirtyDataList.length > 0">
-      <el-col :span="6">
+      <el-col :span="5">
         <el-card shadow="hover" class="stat-card">
           <el-statistic title="待清洗规则数" :value="dirtyDataList.length">
             <template #suffix>
@@ -29,7 +29,7 @@
           </el-statistic>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="5">
         <el-card shadow="hover" class="stat-card">
           <el-statistic title="总影响记录数" :value="totalAffectedCount">
             <template #suffix>
@@ -38,7 +38,7 @@
           </el-statistic>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="5">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-time">
             <div class="stat-title">
@@ -49,7 +49,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="5">
         <el-card shadow="hover" class="stat-card">
           <div style="text-align: center">
             <el-button 
@@ -61,6 +61,22 @@
               size="large"
             >
               批量执行 ({{ selectedRules.length }})
+            </el-button>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
+        <el-card shadow="hover" class="stat-card">
+          <div style="text-align: center">
+            <el-button 
+              type="danger" 
+              :icon="Delete"
+              @click="handleBatchDelete"
+              :disabled="selectedRules.length === 0"
+              :loading="batchDeleting"
+              size="large"
+            >
+              批量删除 ({{ selectedRules.length }})
             </el-button>
           </div>
         </el-card>
@@ -334,7 +350,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, View, Check, Delete, Clock, Right, CircleCheck, CircleClose, Operation } from '@element-plus/icons-vue'
 import { getRules } from '@/api/rule'
-import { previewClean, executeClean, executeBatchClean, scanAllRules, getPendingScans, deleteScan } from '@/api/cleaning'
+import { previewClean, executeClean, executeBatchClean, scanAllRules, getPendingScans, deleteScan, batchDeleteScans } from '@/api/cleaning'
 import type { CleaningRule, CleaningPreview, CleaningResult, DirtyDataScan, ScanResult } from '@/types'
 import Layout from '@/components/Layout.vue'
 
@@ -377,6 +393,7 @@ const currentRule = ref<DirtyDataItem | null>(null)
 const selectedRules = ref<DirtyDataItem[]>([])
 const lastScanTime = ref<string>('')
 const batchExecuting = ref(false)
+const batchDeleting = ref(false)
 const batchResult = ref<BatchCleaningResult | null>(null)
 const batchResultVisible = ref(false)
 
@@ -638,6 +655,49 @@ async function handleDelete(item: DirtyDataItem) {
     }
   } finally {
     deletingId.value = null
+  }
+}
+
+async function handleBatchDelete() {
+  if (selectedRules.value.length === 0) {
+    ElMessage.warning('请先选择要删除的记录')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedRules.value.length} 条扫描记录吗？删除后需要重新扫描才能再次显示。`,
+      '批量删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        distinguishCancelAndClose: true
+      }
+    )
+    
+    batchDeleting.value = true
+    const scanIds = selectedRules.value.map(item => item.id)
+    
+    const result = await batchDeleteScans(scanIds) as any
+    
+    ElMessage.success(`批量删除成功：已删除 ${result.deletedCount} 条记录`)
+    
+    // 从列表中移除已删除的记录
+    dirtyDataList.value = dirtyDataList.value.filter(
+      item => !scanIds.includes(item.id)
+    )
+    
+    // 清空选择
+    selectedRules.value = []
+    
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('批量删除失败', error)
+      ElMessage.error('批量删除失败')
+    }
+  } finally {
+    batchDeleting.value = false
   }
 }
 </script>
