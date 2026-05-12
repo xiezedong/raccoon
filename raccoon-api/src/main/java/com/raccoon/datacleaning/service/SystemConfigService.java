@@ -181,6 +181,12 @@ public class SystemConfigService {
         setDefaultConfig("safety.max_auto_clean_records", "1000", "单次自动清洗的最大记录数");
         setDefaultConfig("safety.manual_confirm_threshold", "100", "需要人工确认的影响记录数阈值");
         
+        // 定时扫描配置
+        setDefaultConfig("scan.scheduled.enabled", "false", "是否启用定时扫描");
+        setDefaultConfig("scan.scheduled.preset", "disabled", "预设时间");
+        setDefaultConfig("scan.scheduled.cron", "0 0 2 * * ?", "自定义Cron表达式");
+        setDefaultConfig("scan.scheduled.min_interval_hours", "6", "最小执行间隔（小时）");
+        
         // 定时 AI 发现配置
         setDefaultConfig("ai_discovery.scheduled.enabled", "false", "是否启用定时AI发现");
         setDefaultConfig("ai_discovery.scheduled.preset", "disabled", "预设时间");

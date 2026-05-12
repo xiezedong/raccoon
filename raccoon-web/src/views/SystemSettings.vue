@@ -288,6 +288,58 @@
               />
               <span class="form-tip">影响记录数超过此值需人工确认</span>
             </el-form-item>
+
+            <el-divider content-position="left">定时扫描脏数据</el-divider>
+
+            <el-form-item label="启用定时扫描">
+              <el-switch v-model="scheduledScanEnabled" />
+              <span class="form-tip">启用后系统将自动定期扫描脏数据</span>
+            </el-form-item>
+
+            <el-form-item label="执行时间" v-if="scheduledScanEnabled">
+              <el-select v-model="scheduledScanPreset" placeholder="请选择执行时间" style="width: 300px">
+                <el-option label="每天凌晨 2:00" value="daily_2am" />
+                <el-option label="每天凌晨 3:00" value="daily_3am" />
+                <el-option label="每周日凌晨 2:00" value="weekly_sunday" />
+                <el-option label="每周一凌晨 2:00" value="weekly_monday" />
+                <el-option label="每月1号凌晨 2:00" value="monthly_1st" />
+                <el-option label="自定义 Cron 表达式" value="custom" />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="Cron 表达式" v-if="scheduledScanEnabled && scheduledScanPreset === 'custom'">
+              <el-input 
+                v-model="configs['scan.scheduled.cron']" 
+                placeholder="0 0 2 * * ?"
+                style="width: 300px"
+              />
+              <span class="form-tip">
+                <a href="https://cron.qqe2.com/" target="_blank" style="color: #409eff">Cron 表达式生成器</a>
+              </span>
+            </el-form-item>
+
+            <el-form-item label="最小执行间隔" v-if="scheduledScanEnabled">
+              <el-input-number
+                v-model="scanMinIntervalHoursValue"
+                :min="1"
+                :max="24"
+              />
+              <span style="margin-left: 10px">小时</span>
+              <span class="form-tip">防止频繁执行，保护系统资源</span>
+            </el-form-item>
+
+            <el-alert
+              v-if="scheduledScanEnabled"
+              title="注意事项"
+              type="warning"
+              :closable="false"
+            >
+              <div style="line-height: 1.8;">
+                <div>• 定时扫描会查询目标数据库，请合理设置执行频率</div>
+                <div>• 建议在业务低峰期执行（如凌晨）</div>
+                <div>• 扫描结果会保存到数据库，可在清洗执行页面查看</div>
+              </div>
+            </el-alert>
           </el-form>
         </el-tab-pane>
       </el-tabs>
@@ -380,6 +432,22 @@ const maxAutoCleanValue = computed({
 const manualConfirmValue = computed({
   get: () => parseInt(configs.value['safety.manual_confirm_threshold'] || '100'),
   set: (val) => configs.value['safety.manual_confirm_threshold'] = val.toString()
+})
+
+// 定时扫描配置
+const scheduledScanEnabled = computed({
+  get: () => configs.value['scan.scheduled.enabled'] === 'true',
+  set: (val) => configs.value['scan.scheduled.enabled'] = val.toString()
+})
+
+const scheduledScanPreset = computed({
+  get: () => configs.value['scan.scheduled.preset'] || 'disabled',
+  set: (val) => configs.value['scan.scheduled.preset'] = val
+})
+
+const scanMinIntervalHoursValue = computed({
+  get: () => parseInt(configs.value['scan.scheduled.min_interval_hours'] || '6'),
+  set: (val) => configs.value['scan.scheduled.min_interval_hours'] = val.toString()
 })
 
 // 定时 AI 发现配置

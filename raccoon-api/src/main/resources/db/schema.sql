@@ -256,6 +256,11 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('self_learning.auto_add_threshold', '0.95', '自动添加规则的置信度阈值'),
 ('self_learning.auto_apply_threshold', '0.98', '自动应用清洗的置信度阈值'),
 ('safety.max_auto_clean_records', '1000', '单次自动清洗的最大记录数'),
+('safety.manual_confirm_threshold', '100', '需要人工确认的影响记录数阈值'),
+('scan.scheduled.enabled', 'false', '是否启用定时扫描'),
+('scan.scheduled.preset', 'disabled', '定时扫描预设时间'),
+('scan.scheduled.cron', '0 0 2 * * ?', '定时扫描Cron表达式'),
+('scan.scheduled.min_interval_hours', '6', '定时扫描最小执行间隔（小时）'),
 ('llm.batch_size', '50', '每批发送给大模型的数量')
 ON CONFLICT (config_key) DO NOTHING;
 
