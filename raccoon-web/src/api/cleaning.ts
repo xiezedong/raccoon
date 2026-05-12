@@ -18,6 +18,15 @@ export function executeClean(ruleId: number, executedBy?: string) {
 }
 
 /**
+ * 批量执行清洗
+ */
+export function executeBatchClean(ruleIds: number[], executedBy?: string) {
+  return request.post<any>('/cleaning/execute/batch', ruleIds, {
+    params: { executedBy }
+  })
+}
+
+/**
  * 回滚清洗
  */
 export function rollbackClean(taskId: number, executedBy?: string) {

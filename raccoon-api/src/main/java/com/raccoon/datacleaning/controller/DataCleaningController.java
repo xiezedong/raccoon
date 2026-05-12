@@ -51,6 +51,17 @@ public class DataCleaningController {
         DataCleaningExecutor.CleaningResult result = dataCleaningExecutor.executeClean(ruleId, executedBy);
         return ResponseEntity.ok(result);
     }
+    
+    /**
+     * 批量执行清洗
+     */
+    @PostMapping("/execute/batch")
+    public ResponseEntity<DataCleaningExecutor.BatchCleaningResult> executeBatchClean(
+            @RequestBody List<Long> ruleIds,
+            @RequestParam(required = false, defaultValue = "system") String executedBy) {
+        DataCleaningExecutor.BatchCleaningResult result = dataCleaningExecutor.executeBatchClean(ruleIds, executedBy);
+        return ResponseEntity.ok(result);
+    }
 
     /**
      * 回滚清洗

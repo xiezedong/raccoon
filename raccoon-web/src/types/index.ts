@@ -84,7 +84,22 @@ export interface CleaningResult {
   totalRecords: number
   cleanedRecords: number
   success: boolean
+  needConfirm?: boolean
   errorMessage?: string
+}
+
+/**
+ * 批量清洗结果
+ */
+export interface BatchCleaningResult {
+  totalRules: number
+  successCount: number
+  failedCount: number
+  totalRecords: number
+  totalCleaned: number
+  results: CleaningResult[]
+  startTime: string
+  endTime: string
 }
 
 /**
@@ -97,7 +112,7 @@ export interface CleaningTask {
   columnName: string
   totalRecords: number
   cleanedRecords: number
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'pending_confirm' | 'running' | 'completed' | 'failed'
   errorMessage?: string
   startedAt?: string
   completedAt?: string

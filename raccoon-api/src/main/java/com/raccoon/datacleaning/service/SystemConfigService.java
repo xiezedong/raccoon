@@ -57,6 +57,49 @@ public class SystemConfigService {
         String value = getConfig(key);
         return value != null ? value : defaultValue;
     }
+    
+    /**
+     * 获取整数配置
+     */
+    public int getIntConfig(String key, int defaultValue) {
+        String value = getConfig(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            log.warn("配置 {} 的值 {} 不是有效的整数，使用默认值 {}", key, value, defaultValue);
+            return defaultValue;
+        }
+    }
+    
+    /**
+     * 获取布尔配置
+     */
+    public boolean getBooleanConfig(String key, boolean defaultValue) {
+        String value = getConfig(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
+    
+    /**
+     * 获取浮点配置
+     */
+    public double getDoubleConfig(String key, double defaultValue) {
+        String value = getConfig(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            log.warn("配置 {} 的值 {} 不是有效的浮点数，使用默认值 {}", key, value, defaultValue);
+            return defaultValue;
+        }
+    }
 
     /**
      * 更新配置
