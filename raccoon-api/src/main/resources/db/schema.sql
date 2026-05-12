@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS cleaning_logs (
     new_value VARCHAR(255),
     record_id BIGINT,
     rule_id BIGINT REFERENCES cleaning_rules(id) ON DELETE SET NULL,
+    task_id BIGINT REFERENCES cleaning_tasks(id) ON DELETE SET NULL,
     executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     executed_by VARCHAR(100)
 );
@@ -88,9 +89,11 @@ CREATE TABLE IF NOT EXISTS cleaning_logs (
 CREATE INDEX idx_cleaning_logs_table_column ON cleaning_logs(table_name, column_name);
 CREATE INDEX idx_cleaning_logs_executed_at ON cleaning_logs(executed_at DESC);
 CREATE INDEX idx_cleaning_logs_rule_id ON cleaning_logs(rule_id);
+CREATE INDEX idx_cleaning_logs_task_id ON cleaning_logs(task_id);
 
 -- 添加注释
 COMMENT ON TABLE cleaning_logs IS '数据清洗执行日志表';
+COMMENT ON COLUMN cleaning_logs.task_id IS '关联的清洗任务ID';
 
 -- 4. 学习日志表
 CREATE TABLE IF NOT EXISTS learning_logs (
@@ -162,7 +165,7 @@ COMMENT ON COLUMN column_metadata.value_pattern IS '值模式: enum/free_text/co
 COMMENT ON COLUMN column_metadata.cardinality IS '唯一值数量';
 COMMENT ON COLUMN column_metadata.monitor_enabled IS '是否启用监控';
 
--- 7. 清洗任务表
+-- 7. 清洗任务表（需要在 cleaning_logs 之前创建）
 CREATE TABLE IF NOT EXISTS cleaning_tasks (
     id BIGSERIAL PRIMARY KEY,
     task_name VARCHAR(200) NOT NULL,
@@ -186,7 +189,31 @@ CREATE INDEX idx_cleaning_tasks_created_at ON cleaning_tasks(created_at DESC);
 COMMENT ON TABLE cleaning_tasks IS '清洗任务记录表';
 COMMENT ON COLUMN cleaning_tasks.status IS '状态: pending/running/completed/failed';
 
--- 8. 系统配置表
+-- 3. 清洗日志表（引用 cleaning_tasks，所以放在后面）
+CREATE TABLE IF NOT EXISTS cleaning_logs (
+    id BIGSERIAL PRIMARY KEY,
+    table_name VARCHAR(100) NOT NULL,
+    column_name VARCHAR(100) NOT NULL,
+    old_value VARCHAR(255),
+    new_value VARCHAR(255),
+    record_id BIGINT,
+    rule_id BIGINT REFERENCES cleaning_rules(id) ON DELETE SET NULL,
+    task_id BIGINT REFERENCES cleaning_tasks(id) ON DELETE SET NULL,
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    executed_by VARCHAR(100)
+);
+
+-- 创建索引
+CREATE INDEX idx_cleaning_logs_table_column ON cleaning_logs(table_name, column_name);
+CREATE INDEX idx_cleaning_logs_executed_at ON cleaning_logs(executed_at DESC);
+CREATE INDEX idx_cleaning_logs_rule_id ON cleaning_logs(rule_id);
+CREATE INDEX idx_cleaning_logs_task_id ON cleaning_logs(task_id);
+
+-- 添加注释
+COMMENT ON TABLE cleaning_logs IS '数据清洗执行日志表';
+COMMENT ON COLUMN cleaning_logs.task_id IS '关联的清洗任务ID';
+
+-- 4. 学习日志表
 CREATE TABLE IF NOT EXISTS system_config (
     id BIGSERIAL PRIMARY KEY,
     config_key VARCHAR(100) NOT NULL UNIQUE,

@@ -112,12 +112,41 @@ export interface CleaningTask {
   columnName: string
   totalRecords: number
   cleanedRecords: number
-  status: 'pending' | 'pending_confirm' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'pending_confirm' | 'running' | 'completed' | 'failed' | 'rolled_back'
   errorMessage?: string
   startedAt?: string
   completedAt?: string
   createdAt: string
   createdBy: string
+}
+
+/**
+ * 清洗日志
+ */
+export interface CleaningLog {
+  id: number
+  tableName: string
+  columnName: string
+  oldValue: string
+  newValue: string
+  recordId: number
+  ruleId: number
+  executedAt: string
+  executedBy: string
+}
+
+/**
+ * 日志统计
+ */
+export interface LogStatistics {
+  totalLogs: number
+  totalTasks: number
+  completedTasks: number
+  failedTasks: number
+  runningTasks: number
+  totalCleanedRecords: number
+  todayLogs: number
+  weekLogs: number
 }
 
 /**

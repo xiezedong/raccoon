@@ -70,11 +70,12 @@ public class DataCleaningController {
     public ResponseEntity<Map<String, Object>> rollbackClean(
             @PathVariable Long taskId,
             @RequestParam(required = false, defaultValue = "system") String executedBy) {
-        int count = dataCleaningExecutor.rollbackClean(taskId, executedBy);
+        DataCleaningExecutor.RollbackResult result = dataCleaningExecutor.rollbackClean(taskId, executedBy);
         return ResponseEntity.ok(Map.of(
             "success", true,
-            "rolledBackCount", count,
-            "message", "成功回滚 " + count + " 条记录"
+            "successCount", result.getSuccessCount(),
+            "failedCount", result.getFailedCount(),
+            "message", result.getMessage()
         ));
     }
 

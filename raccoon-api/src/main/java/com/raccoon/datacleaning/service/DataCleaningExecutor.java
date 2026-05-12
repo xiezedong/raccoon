@@ -210,7 +210,7 @@ public class DataCleaningExecutor {
                 log.info("批量更新完成: {} 条记录", updatedCount);
             }
             
-            // 4. 记录清洗日志
+            // 4. 记录清洗日志（关联 taskId）
             List<CleaningLog> logs = new ArrayList<>();
             for (DirtyDataDetector.DirtyDataRecord record : dirtyRecords) {
                 CleaningLog cleaningLog = new CleaningLog();
@@ -220,6 +220,7 @@ public class DataCleaningExecutor {
                 cleaningLog.setNewValue(rule.getStandardValue());
                 cleaningLog.setRecordId(record.getId());
                 cleaningLog.setRuleId(rule.getId());
+                cleaningLog.setTaskId(task.getId());  // 关联任务ID
                 cleaningLog.setExecutedBy(task.getCreatedBy());
                 logs.add(cleaningLog);
             }
@@ -318,37 +319,90 @@ public class DataCleaningExecutor {
      * 回滚清洗
      */
     @Transactional
-    public int rollbackClean(Long taskId, String executedBy) {
+    public RollbackResult rollbackClean(Long taskId, String executedBy) {
         CleaningTask task = cleaningTaskRepository.findById(taskId)
             .orElseThrow(() -> new RuntimeException("任务不存在: " + taskId));
         
-        log.info("开始回滚清洗任务: {}", taskId);
-        
-        // 查询该任务的所有清洗日志
-        List<CleaningLog> logs = cleaningLogRepository.findByRuleId(task.getId());
-        
-        int rolledBackCount = 0;
-        
-        for (CleaningLog cleaningLog : logs) {
-            try {
-                // 恢复原值
-                String updateSql = String.format(
-                    "UPDATE %s SET %s = ? WHERE id = ?",
-                    cleaningLog.getTableName(),
-                    cleaningLog.getColumnName()
-                );
-                
-                jdbcTemplate.update(updateSql, cleaningLog.getOldValue(), cleaningLog.getRecordId());
-                rolledBackCount++;
-                
-            } catch (Exception e) {
-                log.error("回滚记录失败: id={}", cleaningLog.getRecordId(), e);
-            }
+        // 检查任务状态
+        if (!"completed".equals(task.getStatus())) {
+            throw new RuntimeException("只能回滚已完成的任务，当前状态: " + task.getStatus());
         }
         
-        log.info("回滚完成: {}/{}", rolledBackCount, logs.size());
+        log.info("开始回滚清洗任务: {}, 执行人: {}", taskId, executedBy);
         
-        return rolledBackCount;
+        // 直接通过 taskId 查询该任务的所有清洗日志
+        List<CleaningLog> logs = cleaningLogRepository.findByTaskId(taskId);
+        
+        if (logs.isEmpty()) {
+            log.warn("任务 {} 没有找到清洗日志", taskId);
+            return new RollbackResult(0, 0, "未找到清洗日志");
+        }
+        
+        log.info("找到 {} 条清洗日志需要回滚", logs.size());
+        
+        int rolledBackCount = 0;
+        int failedCount = 0;
+        
+        try (var conn = targetDatabaseService.getTargetConnection()) {
+            for (CleaningLog cleaningLog : logs) {
+                try {
+                    // 恢复原值
+                    String updateSql = String.format(
+                        "UPDATE %s SET %s = ? WHERE id = ?",
+                        cleaningLog.getTableName(),
+                        cleaningLog.getColumnName()
+                    );
+                    
+                    try (var pstmt = conn.prepareStatement(updateSql)) {
+                        pstmt.setString(1, cleaningLog.getOldValue());
+                        pstmt.setLong(2, cleaningLog.getRecordId());
+                        
+                        int updated = pstmt.executeUpdate();
+                        if (updated > 0) {
+                            rolledBackCount++;
+                        } else {
+                            failedCount++;
+                            log.warn("回滚记录未找到: table={}, id={}", 
+                                cleaningLog.getTableName(), cleaningLog.getRecordId());
+                        }
+                    }
+                    
+                } catch (Exception e) {
+                    failedCount++;
+                    log.error("回滚记录失败: id={}", cleaningLog.getRecordId(), e);
+                }
+            }
+            
+            // 更新任务状态为已回滚
+            task.setStatus("rolled_back");
+            task.setCompletedAt(LocalDateTime.now());
+            cleaningTaskRepository.save(task);
+            
+        } catch (Exception e) {
+            log.error("回滚失败", e);
+            throw new RuntimeException("回滚失败: " + e.getMessage(), e);
+        }
+        
+        log.info("回滚完成: 成功={}, 失败={}, 总数={}", rolledBackCount, failedCount, logs.size());
+        
+        return new RollbackResult(rolledBackCount, failedCount, 
+            String.format("成功回滚 %d 条记录，失败 %d 条", rolledBackCount, failedCount));
+    }
+    
+    /**
+     * 回滚结果
+     */
+    @Data
+    public static class RollbackResult {
+        private final int successCount;
+        private final int failedCount;
+        private final String message;
+        
+        public RollbackResult(int successCount, int failedCount, String message) {
+            this.successCount = successCount;
+            this.failedCount = failedCount;
+            this.message = message;
+        }
     }
 
     /**

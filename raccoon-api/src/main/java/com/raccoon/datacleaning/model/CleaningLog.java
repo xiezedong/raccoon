@@ -38,6 +38,9 @@ public class CleaningLog {
 
     @Column(name = "rule_id")
     private Long ruleId;
+    
+    @Column(name = "task_id")
+    private Long taskId;
 
     @Column(name = "executed_at", updatable = false)
     private LocalDateTime executedAt;

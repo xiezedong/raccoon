@@ -24,11 +24,26 @@ public interface CleaningLogRepository extends JpaRepository<CleaningLog, Long> 
      * 根据规则ID查询日志
      */
     List<CleaningLog> findByRuleId(Long ruleId);
+    
+    /**
+     * 根据任务ID查询日志
+     */
+    List<CleaningLog> findByTaskId(Long taskId);
 
     /**
      * 查询指定时间范围内的日志
      */
     List<CleaningLog> findByExecutedAtBetween(LocalDateTime startTime, LocalDateTime endTime);
+    
+    /**
+     * 根据表名、字段名和时间范围查询日志
+     */
+    List<CleaningLog> findByTableNameAndColumnNameAndExecutedAtBetween(
+        String tableName, 
+        String columnName, 
+        LocalDateTime startTime, 
+        LocalDateTime endTime
+    );
 
     /**
      * 查询最近的日志
