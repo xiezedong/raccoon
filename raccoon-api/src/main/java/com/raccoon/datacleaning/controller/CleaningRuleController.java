@@ -52,6 +52,19 @@ public class CleaningRuleController {
         cleaningRuleService.deleteRule(id);
         return ResponseEntity.ok().build();
     }
+    
+    /**
+     * 批量删除规则
+     */
+    @DeleteMapping("/batch")
+    public ResponseEntity<Map<String, Object>> batchDeleteRules(@RequestBody List<Long> ruleIds) {
+        int deletedCount = cleaningRuleService.batchDeleteRules(ruleIds);
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", "批量删除成功",
+            "deletedCount", deletedCount
+        ));
+    }
 
     /**
      * 查询规则

@@ -37,6 +37,13 @@ export function deleteRule(id: number) {
 }
 
 /**
+ * 批量删除规则
+ */
+export function batchDeleteRules(ruleIds: number[]) {
+  return request.delete('/rules/batch', { data: ruleIds })
+}
+
+/**
  * 搜索规则
  */
 export function searchRules(tableName: string, columnName: string) {

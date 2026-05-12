@@ -67,6 +67,30 @@ public class CleaningRuleService {
         log.info("删除清洗规则: {}", id);
         cleaningRuleRepository.deleteById(id);
     }
+    
+    /**
+     * 批量删除规则
+     */
+    @Transactional
+    public int batchDeleteRules(List<Long> ruleIds) {
+        if (ruleIds == null || ruleIds.isEmpty()) {
+            return 0;
+        }
+        
+        int deletedCount = 0;
+        for (Long ruleId : ruleIds) {
+            try {
+                cleaningRuleRepository.deleteById(ruleId);
+                deletedCount++;
+                log.info("删除清洗规则: {}", ruleId);
+            } catch (Exception e) {
+                log.error("删除规则失败: ruleId={}", ruleId, e);
+            }
+        }
+        
+        log.info("批量删除清洗规则: 总数={}, 成功={}", ruleIds.size(), deletedCount);
+        return deletedCount;
+    }
 
     /**
      * 根据ID查询规则

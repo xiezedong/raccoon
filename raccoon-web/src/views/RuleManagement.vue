@@ -3,6 +3,15 @@
     <div class="page-header">
       <h2>规则管理</h2>
       <div class="actions">
+        <el-button 
+          type="danger" 
+          :icon="Delete"
+          @click="handleBatchDelete"
+          :disabled="selectedRules.length === 0"
+          :loading="batchDeleting"
+        >
+          批量删除 ({{ selectedRules.length }})
+        </el-button>
         <el-button :icon="Download" @click="downloadTemplate">下载模板</el-button>
         <el-upload
           :show-file-list="false"
@@ -16,7 +25,13 @@
     </div>
 
     <!-- 规则列表 -->
-    <el-table :data="rules" v-loading="loading" border>
+    <el-table 
+      :data="rules" 
+      v-loading="loading" 
+      border
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="55" />
       <el-table-column prop="tableName" label="表名" width="150" />
       <el-table-column prop="columnName" label="字段名" width="150" />
       <el-table-column prop="columnDescription" label="字段描述" width="200" />
@@ -95,13 +110,15 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload, Download } from '@element-plus/icons-vue'
-import { getRules, createRule, updateRule, deleteRule, importRules } from '@/api/rule'
+import { Plus, Upload, Download, Delete } from '@element-plus/icons-vue'
+import { getRules, createRule, updateRule, deleteRule, importRules, batchDeleteRules } from '@/api/rule'
 import type { CleaningRule } from '@/types'
 import Layout from '@/components/Layout.vue'
 
 const loading = ref(false)
 const rules = ref<CleaningRule[]>([])
+const selectedRules = ref<CleaningRule[]>([])
+const batchDeleting = ref(false)
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增规则')
 const formRef = ref()
@@ -165,6 +182,49 @@ async function handleDelete(row: CleaningRule) {
   } catch (error) {
     // 用户取消
   }
+}
+
+async function handleBatchDelete() {
+  if (selectedRules.value.length === 0) {
+    ElMessage.warning('请先选择要删除的规则')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedRules.value.length} 条规则吗？删除后无法恢复。`,
+      '批量删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        distinguishCancelAndClose: true
+      }
+    )
+    
+    batchDeleting.value = true
+    const ruleIds = selectedRules.value.map(rule => rule.id!)
+    
+    const result = await batchDeleteRules(ruleIds) as any
+    
+    ElMessage.success(`批量删除成功：已删除 ${result.deletedCount} 条规则`)
+    
+    // 清空选择并重新加载
+    selectedRules.value = []
+    loadRules()
+    
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('批量删除失败', error)
+      ElMessage.error('批量删除失败')
+    }
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+function handleSelectionChange(selection: CleaningRule[]) {
+  selectedRules.value = selection
 }
 
 async function handleSubmit() {
