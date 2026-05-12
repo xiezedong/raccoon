@@ -146,7 +146,10 @@ public class AIDiscoveryService {
                 allCandidates.addAll(batchCandidates);
             }
             
-            // 4. 保存候选规则
+            // 5. 标记与已有规则重复的候选规则
+            markDuplicateCandidates(allCandidates, existingRules);
+            
+            // 6. 保存候选规则
             if (!allCandidates.isEmpty()) {
                 candidateRuleRepository.saveAll(allCandidates);
                 log.info("保存了 {} 条候选规则", allCandidates.size());
@@ -193,18 +196,27 @@ public class AIDiscoveryService {
             List<CleaningRule> existingRules) {
         
         try {
+            log.info("=== 开始批量发现 ===");
+            log.info("表名: {}, 字段名: {}, 值数量: {}", tableName, columnName, values.size());
+            
             // 构建提示词
             String prompt = buildPrompt(tableName, columnName, columnDescription, values, existingRules);
+            log.debug("提示词长度: {} 字符", prompt.length());
             
             // 调用大模型
+            log.info("调用大模型分析...{}",prompt);
             String response = llmService.chat(prompt);
-            log.debug("LLM 响应: {}", response);
+            log.info("大模型响应长度: {} 字符", response != null ? response.length() : 0);
+            log.debug("大模型完整响应: {}", response);
             
             // 解析响应
-            return parseResponse(tableName, columnName, columnDescription, response);
+            List<CandidateRule> candidates = parseResponse(tableName, columnName, columnDescription, response);
+            log.info("解析到 {} 条候选规则", candidates.size());
+            
+            return candidates;
             
         } catch (Exception e) {
-            log.error("批量发现失败", e);
+            log.error("批量发现失败: 表={}, 字段={}", tableName, columnName, e);
             return new ArrayList<>();
         }
     }
@@ -219,9 +231,68 @@ public class AIDiscoveryService {
             List<DirtyDataDetector.ValueCount> values,
             List<CleaningRule> existingRules) {
         
+        // 从配置中读取提示词模板，如果没有则使用默认模板
+        String promptTemplate = systemConfigService.getConfig("ai_discovery.prompt_template");
+        
+        if (promptTemplate != null && !promptTemplate.trim().isEmpty()) {
+            // 使用用户配置的提示词模板
+            return buildPromptFromTemplate(promptTemplate, tableName, columnName, columnDescription, values, existingRules);
+        }
+        
+        // 使用默认提示词
+        return buildDefaultPrompt(tableName, columnName, columnDescription, values, existingRules);
+    }
+    
+    /**
+     * 从模板构建提示词
+     */
+    private String buildPromptFromTemplate(
+            String template,
+            String tableName,
+            String columnName,
+            String columnDescription,
+            List<DirtyDataDetector.ValueCount> values,
+            List<CleaningRule> existingRules) {
+        
+        // 构建已有规则文本
+        StringBuilder existingRulesText = new StringBuilder();
+        if (!existingRules.isEmpty()) {
+            for (CleaningRule rule : existingRules) {
+                existingRulesText.append("- 标准值: ").append(rule.getStandardValue());
+                existingRulesText.append(" | 错误值: ").append(String.join("、", rule.getDirtyValues())).append("\n");
+            }
+        }
+        
+        // 构建唯一值文本
+        StringBuilder valuesText = new StringBuilder();
+        for (DirtyDataDetector.ValueCount vc : values) {
+            valuesText.append("- ").append(vc.getValue()).append(" | ").append(vc.getCount()).append("\n");
+        }
+        
+        // 替换占位符
+        String prompt = template
+                .replace("{{tableName}}", tableName)
+                .replace("{{columnName}}", columnName)
+                .replace("{{columnDescription}}", columnDescription != null ? columnDescription : "")
+                .replace("{{existingRules}}", existingRulesText.toString())
+                .replace("{{values}}", valuesText.toString());
+        
+        return prompt;
+    }
+    
+    /**
+     * 构建默认提示词
+     */
+    private String buildDefaultPrompt(
+            String tableName,
+            String columnName,
+            String columnDescription,
+            List<DirtyDataDetector.ValueCount> values,
+            List<CleaningRule> existingRules) {
+        
         StringBuilder prompt = new StringBuilder();
         prompt.append("# 任务\n");
-        prompt.append("分析以下数据库字段的值，识别出可能的脏数据（变体、简称、错别字、不规范写法等），并给出标准值。\n\n");
+        prompt.append("你是一个数据质量专家。分析以下数据库字段的值，识别出可能的脏数据（变体、简称、错别字、不规范写法等），并给出标准值。\n\n");
         
         prompt.append("# 字段信息\n");
         prompt.append("- 表名: ").append(tableName).append("\n");
@@ -248,28 +319,42 @@ public class AIDiscoveryService {
         }
         prompt.append("\n");
         
-        prompt.append("# 输出要求\n");
-        prompt.append("请以 JSON 数组格式输出发现的清洗规则，每条规则包含：\n");
+        prompt.append("# 分析要求\n");
+        prompt.append("1. 仔细分析上述值，找出可能的脏数据模式\n");
+        prompt.append("2. 脏数据包括：同一概念的不同写法、缩写、错别字、多余空格/符号、不规范格式等\n");
+        prompt.append("3. 如果所有值都是规范的、没有明显的脏数据，则返回空数组 []\n");
+        prompt.append("4. 不要为了完成任务而强行创建规则\n");
+        prompt.append("5. 只有在确实发现脏数据时才输出规则\n\n");
+        
+        prompt.append("# 输出格式\n");
+        prompt.append("以 JSON 数组格式输出发现的清洗规则，每条规则包含：\n");
         prompt.append("- standardValue: 标准值（从上述值中选择最规范的）\n");
-        prompt.append("- dirtyValues: 错误值数组（需要清洗的值）\n");
-        prompt.append("- reason: 判断理由\n");
+        prompt.append("- dirtyValues: 错误值数组（需要清洗的值，不包含标准值本身）\n");
+        prompt.append("- reason: 判断理由（说明为什么这些是脏数据）\n");
         prompt.append("- confidence: 置信度（0.0-1.0）\n\n");
         
-        prompt.append("注意：\n");
-        prompt.append("1. 只输出 JSON，不要其他文字\n");
+        prompt.append("# 重要约束\n");
+        prompt.append("1. 只输出 JSON 数组，不要其他文字\n");
         prompt.append("2. 不要重复已有规则\n");
         prompt.append("3. 置信度低于 0.7 的不要输出\n");
-        prompt.append("4. 标准值必须是上述值中的一个\n\n");
+        prompt.append("4. 标准值必须是上述值中的一个\n");
+        prompt.append("5. dirtyValues 数组中不能包含 standardValue\n");
+        prompt.append("6. 如果没有发现脏数据，返回空数组 []\n");
+        prompt.append("7. 理由中不能出现\"无需清洗\"、\"数据规范\"等表示不需要清洗的词语\n\n");
         
-        prompt.append("输出示例：\n");
+        prompt.append("# 输出示例\n");
+        prompt.append("发现脏数据时：\n");
         prompt.append("[\n");
         prompt.append("  {\n");
         prompt.append("    \"standardValue\": \"高级工程师\",\n");
         prompt.append("    \"dirtyValues\": [\"高工\", \"高级工程师（外聘）\"],\n");
-        prompt.append("    \"reason\": \"高工是高级工程师的缩写，带括号的是非规范写法\",\n");
+        prompt.append("    \"reason\": \"'高工'是'高级工程师'的缩写，带括号的是非规范写法\",\n");
         prompt.append("    \"confidence\": 0.95\n");
         prompt.append("  }\n");
-        prompt.append("]\n");
+        prompt.append("]\n\n");
+        
+        prompt.append("没有发现脏数据时：\n");
+        prompt.append("[]\n");
         
         return prompt.toString();
     }
@@ -284,33 +369,66 @@ public class AIDiscoveryService {
             // 提取 JSON 部分（可能包含其他文字）
             String json = extractJson(response);
             
+            if (json == null || json.trim().isEmpty() || json.equals("[]")) {
+                log.info("AI 未发现脏数据，返回空结果");
+                return candidates;
+            }
+            
             JsonNode root = objectMapper.readTree(json);
             
             if (root.isArray()) {
                 for (JsonNode node : root) {
-                    CandidateRule candidate = new CandidateRule();
-                    candidate.setTableName(tableName);
-                    candidate.setColumnName(columnName);
-                    candidate.setColumnDescription(columnDescription);
-                    candidate.setStandardValue(node.get("standardValue").asText());
+                    // 验证必需字段
+                    if (!node.has("standardValue") || !node.has("dirtyValues") || 
+                        !node.has("reason") || !node.has("confidence")) {
+                        log.warn("跳过缺少必需字段的候选规则: {}", node);
+                        continue;
+                    }
+                    
+                    String standardValue = node.get("standardValue").asText();
+                    String reason = node.get("reason").asText();
+                    
+                    // 过滤掉"无需清洗"的规则
+                    if (reason.contains("无需清洗") || reason.contains("无需清理") || 
+                        reason.contains("数据规范") || reason.contains("不需要清洗") ||
+                        reason.contains("已经规范") || reason.contains("格式统一")) {
+                        log.info("跳过无需清洗的候选规则: {} - {}", standardValue, reason);
+                        continue;
+                    }
                     
                     // 解析 dirtyValues
                     JsonNode dirtyValuesNode = node.get("dirtyValues");
                     List<String> dirtyValues = new ArrayList<>();
                     if (dirtyValuesNode.isArray()) {
                         for (JsonNode valueNode : dirtyValuesNode) {
-                            dirtyValues.add(valueNode.asText());
+                            String dirtyValue = valueNode.asText();
+                            // 确保错误值不等于标准值
+                            if (!dirtyValue.equals(standardValue)) {
+                                dirtyValues.add(dirtyValue);
+                            }
                         }
                     }
-                    candidate.setDirtyValues(dirtyValues.toArray(new String[0]));
                     
-                    candidate.setReason(node.get("reason").asText());
+                    // 如果没有有效的错误值，跳过
+                    if (dirtyValues.isEmpty()) {
+                        log.info("跳过没有错误值的候选规则: {}", standardValue);
+                        continue;
+                    }
+                    
+                    CandidateRule candidate = new CandidateRule();
+                    candidate.setTableName(tableName);
+                    candidate.setColumnName(columnName);
+                    candidate.setColumnDescription(columnDescription);
+                    candidate.setStandardValue(standardValue);
+                    candidate.setDirtyValues(dirtyValues.toArray(new String[0]));
+                    candidate.setReason(reason);
                     candidate.setConfidence(BigDecimal.valueOf(node.get("confidence").asDouble()));
                     candidate.setSource("ai_discovery");
                     candidate.setStatus("pending");
                     candidate.setCreatedAt(LocalDateTime.now());
                     
                     candidates.add(candidate);
+                    log.info("解析到候选规则: {} -> {}", standardValue, dirtyValues);
                 }
             }
             
@@ -378,6 +496,37 @@ public class AIDiscoveryService {
         }
         
         return result;
+    }
+
+    /**
+     * 标记与已有规则重复的候选规则
+     */
+    private void markDuplicateCandidates(List<CandidateRule> candidates, List<CleaningRule> existingRules) {
+        if (existingRules.isEmpty()) {
+            return;
+        }
+        
+        for (CandidateRule candidate : candidates) {
+            // 检查是否与已有规则的标准值和错误值重复
+            for (CleaningRule existingRule : existingRules) {
+                // 检查标准值是否相同
+                if (candidate.getStandardValue().equals(existingRule.getStandardValue())) {
+                    // 检查错误值是否有重叠
+                    Set<String> candidateDirtySet = new HashSet<>(Arrays.asList(candidate.getDirtyValues()));
+                    Set<String> existingDirtySet = new HashSet<>(Arrays.asList(existingRule.getDirtyValues()));
+                    
+                    candidateDirtySet.retainAll(existingDirtySet);
+                    
+                    // 如果有重叠，标记为重复
+                    if (!candidateDirtySet.isEmpty()) {
+                        candidate.setIsDuplicate(true);
+                        log.info("候选规则与已有规则重复: {} -> {}", 
+                            candidate.getStandardValue(), candidateDirtySet);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /**

@@ -158,8 +158,9 @@
         max-height="500"
         stripe
         border
+        :row-class-name="getRowClassName"
       >
-        <el-table-column type="selection" width="50" fixed />
+        <el-table-column type="selection" width="50" fixed :selectable="isSelectable" />
         <el-table-column prop="tableName" label="表名" width="140" fixed />
         <el-table-column prop="columnName" label="字段名" width="120" />
         <el-table-column prop="standardValue" label="标准值" width="140" show-overflow-tooltip />
@@ -183,6 +184,11 @@
             <el-tag :type="getConfidenceType(row.confidence)" size="small">
               {{ (row.confidence * 100).toFixed(0) }}%
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.isDuplicate" type="info" size="small">已有规则</el-tag>
           </template>
         </el-table-column>
       </el-table>
@@ -413,6 +419,14 @@ function getConfidenceType(confidence: number) {
   if (confidence >= 0.7) return 'warning'
   return 'info'
 }
+
+function getRowClassName({ row }: { row: CandidateRule }) {
+  return row.isDuplicate ? 'duplicate-row' : ''
+}
+
+function isSelectable(row: CandidateRule) {
+  return !row.isDuplicate
+}
 </script>
 
 <style scoped>
@@ -449,5 +463,15 @@ function getConfidenceType(confidence: number) {
 .stat-label {
   font-size: 14px;
   color: #909399;
+}
+
+:deep(.duplicate-row) {
+  background-color: #f5f7fa !important;
+  color: #909399;
+  opacity: 0.6;
+}
+
+:deep(.duplicate-row:hover) {
+  background-color: #f5f7fa !important;
 }
 </style>

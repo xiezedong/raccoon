@@ -342,6 +342,54 @@
             </el-alert>
           </el-form>
         </el-tab-pane>
+
+        <!-- AI 提示词配置 -->
+        <el-tab-pane label="AI 提示词" name="prompt">
+          <el-alert
+            title="说明"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 20px"
+          >
+            自定义 AI 发现功能的提示词模板，留空则使用默认提示词。支持占位符：{{tableName}}, {{columnName}}, {{columnDescription}}, {{existingRules}}, {{values}}
+          </el-alert>
+
+          <el-form :model="configs" label-width="120px" class="config-form">
+            <el-form-item label="提示词模板">
+              <el-input
+                v-model="configs['ai_discovery.prompt_template']"
+                type="textarea"
+                :rows="20"
+                placeholder="留空使用默认提示词"
+                style="font-family: monospace"
+              />
+            </el-form-item>
+
+            <el-form-item>
+              <el-button type="primary" @click="handleGetDefaultPrompt" :loading="loadingPrompt">
+                查看默认提示词
+              </el-button>
+              <el-button @click="handleResetPrompt" :loading="resettingPrompt">
+                重置为默认
+              </el-button>
+            </el-form-item>
+          </el-form>
+
+          <el-alert
+            title="占位符说明"
+            type="info"
+            :closable="false"
+          >
+            <div style="line-height: 1.8;">
+              <div><strong>{{tableName}}</strong> - 表名</div>
+              <div><strong>{{columnName}}</strong> - 字段名</div>
+              <div><strong>{{columnDescription}}</strong> - 字段描述</div>
+              <div><strong>{{existingRules}}</strong> - 已有清洗规则列表</div>
+              <div><strong>{{values}}</strong> - 字段的唯一值列表</div>
+            </div>
+          </el-alert>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -382,6 +430,8 @@ const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const loadingDatabases = ref(false)
+const loadingPrompt = ref(false)
+const resettingPrompt = ref(false)
 const showDatabaseDialog = ref(false)
 const activeTab = ref('database')
 const configList = ref<SystemConfig[]>([])
@@ -593,6 +643,42 @@ function selectDatabase(dbName: string) {
   configs.value['target.db.database'] = dbName
   showDatabaseDialog.value = false
   ElMessage.success(`已选择数据库: ${dbName}`)
+}
+
+async function handleGetDefaultPrompt() {
+  loadingPrompt.value = true
+  try {
+    const response = await fetch('/api/system/config/default-prompt')
+    const data = await response.json()
+    
+    ElMessage.success('已加载默认提示词')
+    configs.value['ai_discovery.prompt_template'] = data.template
+  } catch (error) {
+    console.error('获取默认提示词失败', error)
+    ElMessage.error('获取默认提示词失败')
+  } finally {
+    loadingPrompt.value = false
+  }
+}
+
+async function handleResetPrompt() {
+  resettingPrompt.value = true
+  try {
+    const response = await fetch('/api/system/config/reset-prompt', {
+      method: 'POST'
+    })
+    const data = await response.json()
+    
+    if (data.success) {
+      ElMessage.success('提示词已重置为默认值')
+      configs.value['ai_discovery.prompt_template'] = ''
+    }
+  } catch (error) {
+    console.error('重置提示词失败', error)
+    ElMessage.error('重置提示词失败')
+  } finally {
+    resettingPrompt.value = false
+  }
 }
 </script>
 

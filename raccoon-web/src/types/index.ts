@@ -34,6 +34,7 @@ export interface CandidateRule {
   confidence: number
   source: string
   status: 'pending' | 'approved' | 'rejected'
+  isDuplicate?: boolean
   createdAt?: string
   reviewedAt?: string
   reviewedBy?: string

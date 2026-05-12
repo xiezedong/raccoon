@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS candidate_rules (
     confidence DECIMAL(3,2) NOT NULL,
     source VARCHAR(50) DEFAULT 'ai_discovery',
     status VARCHAR(20) DEFAULT 'pending',
+    is_duplicate BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reviewed_at TIMESTAMP,
     reviewed_by VARCHAR(100),
@@ -70,6 +71,7 @@ CREATE INDEX idx_candidate_rules_rule_id ON candidate_rules(rule_id);
 COMMENT ON TABLE candidate_rules IS 'AI发现的候选规则表';
 COMMENT ON COLUMN candidate_rules.rule_id IS '关联的正式规则ID（审核通过后）';
 COMMENT ON COLUMN candidate_rules.status IS '状态: pending/approved/rejected';
+COMMENT ON COLUMN candidate_rules.is_duplicate IS '是否与已有规则重复';
 
 -- 3. 清洗日志表
 CREATE TABLE IF NOT EXISTS cleaning_logs (

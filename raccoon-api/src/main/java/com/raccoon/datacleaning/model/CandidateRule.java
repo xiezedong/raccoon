@@ -52,6 +52,9 @@ public class CandidateRule {
     @Column(name = "status", length = 20)
     private String status = "pending";
 
+    @Column(name = "is_duplicate")
+    private Boolean isDuplicate = false;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

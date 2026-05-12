@@ -194,6 +194,9 @@ public class SystemConfigService {
         setDefaultConfig("ai_discovery.scheduled.min_interval_hours", "6", "最小执行间隔（小时）");
         setDefaultConfig("ai_discovery.scheduled.timeout_hours", "2", "超时时间（小时）");
         setDefaultConfig("ai_discovery.scheduled.max_fields_per_run", "50", "单次最大扫描字段数");
+        
+        // AI 发现提示词模板（留空则使用默认提示词）
+        setDefaultConfig("ai_discovery.prompt_template", "", "AI发现提示词模板（支持占位符：{{tableName}}, {{columnName}}, {{columnDescription}}, {{existingRules}}, {{values}}）");
     }
 
     /**
