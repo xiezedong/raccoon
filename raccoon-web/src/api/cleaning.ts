@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { CleaningPreview, CleaningResult, DirtyDataRecord, ValueCount } from '@/types'
+import type { CleaningPreview, CleaningResult, DirtyDataRecord, ValueCount, DirtyDataScan, ScanResult } from '@/types'
 
 /**
  * 预览清洗
@@ -49,4 +49,34 @@ export function getUniqueValues(tableName: string, columnName: string) {
   return request.get<ValueCount[]>('/cleaning/unique-values', {
     params: { tableName, columnName }
   })
+}
+
+/**
+ * 扫描所有规则的脏数据（保存到数据库）
+ */
+export function scanAllRules(scannedBy?: string) {
+  return request.post<ScanResult>('/cleaning/scan', null, {
+    params: { scannedBy }
+  })
+}
+
+/**
+ * 获取待处理的扫描结果
+ */
+export function getPendingScans() {
+  return request.get<DirtyDataScan[]>('/cleaning/scans/pending')
+}
+
+/**
+ * 获取最近的扫描结果
+ */
+export function getRecentScans() {
+  return request.get<DirtyDataScan[]>('/cleaning/scans/recent')
+}
+
+/**
+ * 删除扫描结果
+ */
+export function deleteScan(scanId: number) {
+  return request.delete(`/cleaning/scans/${scanId}`)
 }

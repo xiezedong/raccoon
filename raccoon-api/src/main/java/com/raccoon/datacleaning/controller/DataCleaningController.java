@@ -1,7 +1,9 @@
 package com.raccoon.datacleaning.controller;
 
+import com.raccoon.datacleaning.model.DirtyDataScan;
 import com.raccoon.datacleaning.service.DataCleaningExecutor;
 import com.raccoon.datacleaning.service.DirtyDataDetector;
+import com.raccoon.datacleaning.service.DirtyDataScanService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +22,7 @@ public class DataCleaningController {
 
     private final DataCleaningExecutor dataCleaningExecutor;
     private final DirtyDataDetector dirtyDataDetector;
+    private final DirtyDataScanService dirtyDataScanService;
 
     /**
      * 查询脏数据
@@ -97,5 +100,42 @@ public class DataCleaningController {
             @RequestParam String columnName) {
         List<DirtyDataDetector.ValueCount> values = dirtyDataDetector.getUniqueValues(tableName, columnName);
         return ResponseEntity.ok(values);
+    }
+
+    /**
+     * 扫描所有规则的脏数据（保存到数据库）
+     */
+    @PostMapping("/scan")
+    public ResponseEntity<DirtyDataScanService.ScanResult> scanAllRules(
+            @RequestParam(required = false, defaultValue = "system") String scannedBy) {
+        DirtyDataScanService.ScanResult result = dirtyDataScanService.scanAllRules(scannedBy);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 获取待处理的扫描结果
+     */
+    @GetMapping("/scans/pending")
+    public ResponseEntity<List<DirtyDataScan>> getPendingScans() {
+        List<DirtyDataScan> scans = dirtyDataScanService.getPendingScans();
+        return ResponseEntity.ok(scans);
+    }
+
+    /**
+     * 获取最近的扫描结果
+     */
+    @GetMapping("/scans/recent")
+    public ResponseEntity<List<DirtyDataScan>> getRecentScans() {
+        List<DirtyDataScan> scans = dirtyDataScanService.getRecentScans();
+        return ResponseEntity.ok(scans);
+    }
+
+    /**
+     * 删除扫描结果
+     */
+    @DeleteMapping("/scans/{scanId}")
+    public ResponseEntity<Map<String, Object>> deleteScan(@PathVariable Long scanId) {
+        dirtyDataScanService.deleteScan(scanId);
+        return ResponseEntity.ok(Map.of("success", true, "message", "删除成功"));
     }
 }

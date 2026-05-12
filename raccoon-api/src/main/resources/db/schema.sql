@@ -213,7 +213,31 @@ CREATE INDEX idx_cleaning_logs_task_id ON cleaning_logs(task_id);
 COMMENT ON TABLE cleaning_logs IS '数据清洗执行日志表';
 COMMENT ON COLUMN cleaning_logs.task_id IS '关联的清洗任务ID';
 
--- 4. 学习日志表
+-- 4. 脏数据扫描结果表
+CREATE TABLE IF NOT EXISTS dirty_data_scans (
+    id BIGSERIAL PRIMARY KEY,
+    rule_id BIGINT NOT NULL REFERENCES cleaning_rules(id) ON DELETE CASCADE,
+    table_name VARCHAR(100) NOT NULL,
+    column_name VARCHAR(100) NOT NULL,
+    standard_value VARCHAR(255) NOT NULL,
+    dirty_values TEXT[],
+    affected_count INT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    scanned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    scanned_by VARCHAR(100),
+    cleaned_at TIMESTAMP
+);
+
+-- 创建索引
+CREATE INDEX idx_dirty_data_scans_rule_id ON dirty_data_scans(rule_id);
+CREATE INDEX idx_dirty_data_scans_scanned_at ON dirty_data_scans(scanned_at DESC);
+CREATE INDEX idx_dirty_data_scans_status ON dirty_data_scans(status);
+
+-- 添加注释
+COMMENT ON TABLE dirty_data_scans IS '脏数据扫描结果表';
+COMMENT ON COLUMN dirty_data_scans.status IS '状态: pending/cleaning/completed';
+
+-- 5. 学习日志表（系统配置表）
 CREATE TABLE IF NOT EXISTS system_config (
     id BIGSERIAL PRIMARY KEY,
     config_key VARCHAR(100) NOT NULL UNIQUE,

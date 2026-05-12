@@ -158,6 +158,33 @@ export interface ValueCount {
 }
 
 /**
+ * 脏数据扫描结果
+ */
+export interface DirtyDataScan {
+  id: number
+  ruleId: number
+  tableName: string
+  columnName: string
+  standardValue: string
+  dirtyValues: string[]
+  affectedCount: number
+  status: 'pending' | 'cleaning' | 'completed'
+  scannedAt: string
+  scannedBy: string
+  cleanedAt?: string
+}
+
+/**
+ * 扫描结果
+ */
+export interface ScanResult {
+  totalRules: number
+  foundCount: number
+  totalAffected: number
+  message: string
+}
+
+/**
  * API 响应
  */
 export interface ApiResponse<T = any> {

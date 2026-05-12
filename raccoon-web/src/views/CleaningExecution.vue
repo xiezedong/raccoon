@@ -325,13 +325,20 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, View, Check, Delete, Clock, Right, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { getRules } from '@/api/rule'
-import { previewClean, executeClean, executeBatchClean } from '@/api/cleaning'
-import type { CleaningRule, CleaningPreview, CleaningResult } from '@/types'
+import { previewClean, executeClean, executeBatchClean, scanAllRules, getPendingScans, deleteScan } from '@/api/cleaning'
+import type { CleaningRule, CleaningPreview, CleaningResult, DirtyDataScan, ScanResult } from '@/types'
 import Layout from '@/components/Layout.vue'
 
-interface DirtyDataItem extends CleaningRule {
-  affectedCount: number
+interface DirtyDataItem {
+  id: number
   ruleId: number
+  tableName: string
+  columnName: string
+  columnDescription?: string
+  standardValue: string
+  dirtyValues: string[]
+  affectedCount: number
+  scannedAt: string
 }
 
 interface BatchCleaningResult {
@@ -368,52 +375,48 @@ const totalAffectedCount = computed(() => {
 })
 
 onMounted(() => {
-  // 页面加载时不自动扫描，等用户点击按钮
+  // 页面加载时自动加载扫描结果
+  loadPendingScans()
 })
+
+async function loadPendingScans() {
+  loading.value = true
+  try {
+    const scans = await getPendingScans() as DirtyDataScan[]
+    
+    dirtyDataList.value = scans.map(scan => ({
+      id: scan.id,
+      ruleId: scan.ruleId,
+      tableName: scan.tableName,
+      columnName: scan.columnName,
+      standardValue: scan.standardValue,
+      dirtyValues: scan.dirtyValues,
+      affectedCount: scan.affectedCount,
+      scannedAt: scan.scannedAt
+    }))
+    
+    if (scans.length > 0) {
+      lastScanTime.value = new Date(scans[0].scannedAt).toLocaleString('zh-CN')
+    }
+  } catch (error) {
+    console.error('加载扫描结果失败', error)
+  } finally {
+    loading.value = false
+  }
+}
 
 async function scanDirtyData() {
   scanning.value = true
-  dirtyDataList.value = []
   
   try {
-    // 1. 获取所有规则
-    const rules = await getRules() as CleaningRule[]
+    ElMessage.info('开始扫描...')
     
-    if (rules.length === 0) {
-      ElMessage.info('暂无清洗规则，请先添加规则')
-      return
-    }
+    const result = await scanAllRules('user') as ScanResult
     
-    ElMessage.info(`开始扫描 ${rules.length} 条规则...`)
+    ElMessage.success(result.message)
     
-    // 2. 逐个规则检查是否有脏数据
-    const dirtyItems: DirtyDataItem[] = []
-    
-    for (const rule of rules) {
-      try {
-        const previewData = await previewClean(rule.id!) as CleaningPreview
-        
-        // 只保留有脏数据的规则
-        if (previewData.affectedCount > 0) {
-          dirtyItems.push({
-            ...rule,
-            affectedCount: previewData.affectedCount,
-            ruleId: rule.id!
-          })
-        }
-      } catch (error) {
-        console.error(`扫描规则 ${rule.id} 失败`, error)
-      }
-    }
-    
-    dirtyDataList.value = dirtyItems
-    lastScanTime.value = new Date().toLocaleString('zh-CN')
-    
-    if (dirtyItems.length === 0) {
-      ElMessage.success('扫描完成，未发现脏数据')
-    } else {
-      ElMessage.success(`扫描完成，发现 ${dirtyItems.length} 条规则命中脏数据，共 ${totalAffectedCount.value} 条记录`)
-    }
+    // 重新加载扫描结果
+    await loadPendingScans()
     
   } catch (error) {
     console.error('扫描失败', error)
@@ -561,15 +564,15 @@ function handleSelectionChange(selection: DirtyDataItem[]) {
 
 function handleResultClose() {
   resultVisible.value = false
-  // 重新扫描以更新列表
-  scanDirtyData()
+  // 重新加载扫描结果
+  loadPendingScans()
 }
 
 function handleBatchResultClose() {
   batchResultVisible.value = false
-  // 清空选择并重新扫描
+  // 清空选择并重新加载
   selectedRules.value = []
-  scanDirtyData()
+  loadPendingScans()
 }
 
 function goToLogs() {
