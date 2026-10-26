@@ -147,9 +147,8 @@
             <el-form-item label="批处理大小">
               <el-input-number
                 v-model="batchSizeValue"
-                :min="10"
+                :min="1"
                 :max="200"
-                :step="10"
               />
               <span class="form-tip">每批发送给大模型的数据量</span>
             </el-form-item>

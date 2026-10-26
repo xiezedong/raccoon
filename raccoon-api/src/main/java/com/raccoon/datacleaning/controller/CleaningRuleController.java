@@ -4,6 +4,7 @@ import com.raccoon.datacleaning.model.CleaningRule;
 import com.raccoon.datacleaning.service.CleaningRuleService;
 import com.raccoon.datacleaning.service.ExcelImportService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -76,11 +77,15 @@ public class CleaningRuleController {
     }
 
     /**
-     * 查询所有规则
+     * 分页查询规则
      */
     @GetMapping
-    public ResponseEntity<List<CleaningRule>> getAllRules() {
-        List<CleaningRule> rules = cleaningRuleService.getAllRules();
+    public ResponseEntity<Page<CleaningRule>> getRules(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String source) {
+        Page<CleaningRule> rules = cleaningRuleService.getRules(page, size, keyword, source);
         return ResponseEntity.ok(rules);
     }
 

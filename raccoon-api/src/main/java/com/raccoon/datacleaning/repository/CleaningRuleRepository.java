@@ -2,6 +2,7 @@ package com.raccoon.datacleaning.repository;
 
 import com.raccoon.datacleaning.model.CleaningRule;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,7 +14,7 @@ import java.util.List;
  * 清洗规则 Repository
  */
 @Repository
-public interface CleaningRuleRepository extends JpaRepository<CleaningRule, Long> {
+public interface CleaningRuleRepository extends JpaRepository<CleaningRule, Long>, JpaSpecificationExecutor<CleaningRule> {
 
     /**
      * 根据表名和字段名查询规则

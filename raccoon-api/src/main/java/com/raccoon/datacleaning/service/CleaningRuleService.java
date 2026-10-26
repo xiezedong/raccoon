@@ -2,13 +2,21 @@ package com.raccoon.datacleaning.service;
 
 import com.raccoon.datacleaning.model.CleaningRule;
 import com.raccoon.datacleaning.repository.CleaningRuleRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -105,6 +113,35 @@ public class CleaningRuleService {
      */
     public List<CleaningRule> getAllRules() {
         return cleaningRuleRepository.findAll();
+    }
+
+    /**
+     * 分页查询规则（按 id 倒序，保证翻页时行不重不漏）
+     */
+    public Page<CleaningRule> getRules(int page, int size, String keyword, String source) {
+        Specification<CleaningRule> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (StringUtils.hasText(keyword)) {
+                String pattern = "%" + keyword.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("tableName")), pattern),
+                        cb.like(cb.lower(root.get("columnName")), pattern),
+                        cb.like(cb.lower(root.get("standardValue")), pattern)
+                ));
+            }
+
+            if (StringUtils.hasText(source)) {
+                predicates.add(cb.equal(root.get("source"), source));
+            }
+
+            return predicates.isEmpty()
+                    ? cb.conjunction()
+                    : cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+        return cleaningRuleRepository.findAll(spec, pageable);
     }
 
     /**
