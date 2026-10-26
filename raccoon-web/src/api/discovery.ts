@@ -1,11 +1,43 @@
 import request from '@/utils/request'
-import type { CandidateRule, DiscoveryResult } from '@/types'
+import type { CandidateRule, DiscoveryResult, DiscoveryTask } from '@/types'
 
 /**
  * 全自动 AI 发现（扫描所有表和字段）
  */
 export function discoverAll() {
   return request.post<DiscoveryResult>('/candidate-rules/discover-all')
+}
+
+/**
+ * 启动全自动 AI 发现，任务在后台执行
+ */
+export function discoverAllAsync() {
+  return request.post<{ success: boolean; taskId: number; message: string }>(
+    '/candidate-rules/discover-all-async'
+  )
+}
+
+/**
+ * 查询单个发现任务的状态与进度
+ */
+export function getTaskStatus(taskId: number) {
+  return request.get<DiscoveryTask>(`/candidate-rules/task/${taskId}`)
+}
+
+/**
+ * 最近 10 条发现任务
+ */
+export function getRecentTasks() {
+  return request.get<DiscoveryTask[]>('/candidate-rules/tasks')
+}
+
+/**
+ * 取消发现任务，在下一个批次边界生效
+ */
+export function cancelTask(taskId: number) {
+  return request.post<{ success: boolean; message: string }>(
+    `/candidate-rules/task/${taskId}/cancel`
+  )
 }
 
 /**

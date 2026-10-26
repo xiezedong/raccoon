@@ -336,15 +336,18 @@ public class AIDiscoveryService {
             
             // 5. 标记与已有规则重复的候选规则
             markDuplicateCandidates(allCandidates, existingRules);
-            
-            // 6. 保存候选规则
-            if (!allCandidates.isEmpty()) {
-                candidateRuleRepository.saveAll(allCandidates);
-                log.info("保存了 {} 条候选规则", allCandidates.size());
+
+            // 6. 与未审核的候选去重后再入库
+            List<CandidateRule> toInsert = mergeIntoPendingCandidates(allCandidates);
+
+            // 7. 保存候选规则
+            if (!toInsert.isEmpty()) {
+                candidateRuleRepository.saveAll(toInsert);
+                log.info("保存了 {} 条候选规则", toInsert.size());
             }
             
             result.setSuccess(true);
-            result.setCandidateCount(allCandidates.size());
+            result.setCandidateCount(toInsert.size());
             result.setMessage("发现完成");
             
         } catch (Exception e) {
@@ -715,6 +718,52 @@ public class AIDiscoveryService {
                 }
             }
         }
+    }
+
+    /**
+     * 与同一字段下未审核的候选去重：标准值相同就把新发现的错误值并入那条记录，不再新增行。
+     * markDuplicateCandidates 比对的是正式规则，未审核的候选之间不去重，
+     * 所以每重跑一次扫描，上一轮没审核的候选都会被原样再提一遍
+     *
+     * @return 需要新入库的候选
+     */
+    private List<CandidateRule> mergeIntoPendingCandidates(List<CandidateRule> candidates) {
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+
+        CandidateRule first = candidates.get(0);
+        Map<String, CandidateRule> pendingByStandardValue = candidateRuleRepository
+                .findByTableNameAndColumnNameAndStatus(first.getTableName(), first.getColumnName(), "pending")
+                .stream()
+                .collect(Collectors.toMap(
+                        CandidateRule::getStandardValue,
+                        candidate -> candidate,
+                        (kept, dropped) -> kept
+                ));
+
+        List<CandidateRule> toInsert = new ArrayList<>();
+
+        for (CandidateRule candidate : candidates) {
+            CandidateRule pending = pendingByStandardValue.get(candidate.getStandardValue());
+
+            if (pending == null) {
+                pendingByStandardValue.put(candidate.getStandardValue(), candidate);
+                toInsert.add(candidate);
+                continue;
+            }
+
+            Set<String> merged = new LinkedHashSet<>(Arrays.asList(pending.getDirtyValues()));
+            if (merged.addAll(Arrays.asList(candidate.getDirtyValues()))) {
+                pending.setDirtyValues(merged.toArray(new String[0]));
+                candidateRuleRepository.save(pending);
+                log.info("并入已有待审核候选: {}.{} [{}]，合并后 {} 个错误值",
+                        pending.getTableName(), pending.getColumnName(),
+                        pending.getStandardValue(), merged.size());
+            }
+        }
+
+        return toInsert;
     }
 
     /**

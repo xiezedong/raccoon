@@ -26,6 +26,11 @@ public interface CandidateRuleRepository extends JpaRepository<CandidateRule, Lo
     List<CandidateRule> findByTableNameAndColumnName(String tableName, String columnName);
 
     /**
+     * 查询指定字段下某状态的候选规则
+     */
+    List<CandidateRule> findByTableNameAndColumnNameAndStatus(String tableName, String columnName, String status);
+
+    /**
      * 查询待审核的候选规则，按置信度降序
      */
     List<CandidateRule> findByStatusOrderByConfidenceDesc(String status);

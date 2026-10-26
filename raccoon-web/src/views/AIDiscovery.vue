@@ -143,7 +143,7 @@
     <el-dialog
       v-model="showDialog"
       title="审核候选规则"
-      width="90%"
+      width="min(900px, calc(100vw - 32px))"
       top="5vh"
       :close-on-click-modal="false"
     >
@@ -164,52 +164,85 @@
             :step="0.1"
             show-input
             style="flex: 1; max-width: 300px"
-            @change="loadCandidates"
+            @change="handleConfidenceFilter"
           />
         </div>
       </div>
 
       <el-table
-        :data="filteredCandidates"
+        :data="pagedCandidates"
         v-loading="loadingCandidates"
         @selection-change="handleSelectionChange"
-        max-height="500"
+        max-height="calc(85vh - 240px)"
         stripe
         border
         :row-class-name="getRowClassName"
       >
-        <el-table-column type="selection" width="50" fixed :selectable="isSelectable" />
-        <el-table-column prop="tableName" label="表名" width="140" fixed />
-        <el-table-column prop="columnName" label="字段名" width="120" />
-        <el-table-column prop="standardValue" label="标准值" width="140" show-overflow-tooltip />
-        <el-table-column prop="dirtyValues" label="错误值" min-width="250">
+        <el-table-column type="selection" width="44" fixed :selectable="isSelectable" />
+        <el-table-column label="字段" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.tableName }}.{{ row.columnName }}</template>
+        </el-table-column>
+        <el-table-column prop="standardValue" label="标准值" min-width="90" show-overflow-tooltip />
+        <el-table-column label="错误值" min-width="120">
           <template #default="{ row }">
-            <div style="display: flex; flex-wrap: wrap; gap: 4px">
+            <div class="dirty-cell">
               <el-tag
-                v-for="(value, index) in row.dirtyValues"
-                :key="index"
+                v-for="value in visibleDirtyValues(row)"
+                :key="value"
                 size="small"
                 type="info"
               >
                 {{ value }}
               </el-tag>
+              <el-popover v-if="hiddenDirtyCount(row)" trigger="click" width="280">
+                <template #reference>
+                  <el-button link type="primary" size="small">+{{ hiddenDirtyCount(row) }}</el-button>
+                </template>
+                <div class="dirty-pop">
+                  <el-tag
+                    v-for="value in row.dirtyValues.slice(DIRTY_VISIBLE)"
+                    :key="value"
+                    size="small"
+                    type="info"
+                  >
+                    {{ value }}
+                  </el-tag>
+                </div>
+              </el-popover>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="reason" label="理由" min-width="250" show-overflow-tooltip />
-        <el-table-column prop="confidence" label="置信度" width="90" align="center">
+        <el-table-column prop="confidence" label="置信度" width="76" align="center">
           <template #default="{ row }">
             <el-tag :type="getConfidenceType(row.confidence)" size="small">
               {{ (row.confidence * 100).toFixed(0) }}%
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column label="理由" width="56" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.isDuplicate" type="info" size="small">已有规则</el-tag>
+            <el-popover v-if="row.reason" trigger="click" width="360">
+              <template #reference>
+                <el-icon class="reason-icon"><Document /></el-icon>
+              </template>
+              <div class="reason-pop">{{ row.reason }}</div>
+            </el-popover>
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="candidate-pagination">
+        <el-pagination
+          :current-page="candidatePage"
+          :page-size="candidatePageSize"
+          :total="filteredCandidates.length"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="handleCandidateSizeChange"
+          @current-change="handleCandidatePageChange"
+        />
+      </div>
 
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center">
@@ -240,9 +273,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, List, VideoPause } from '@element-plus/icons-vue'
+import { Search, Refresh, List, VideoPause, Document } from '@element-plus/icons-vue'
 import { discoverAllAsync, getTaskStatus, getRecentTasks, cancelTask, getPendingRules, reviewRules, getStats } from '@/api/discovery'
 import type { CandidateRule, DiscoveryResult, DiscoveryTask } from '@/types'
 import Layout from '@/components/Layout.vue'
@@ -265,6 +298,8 @@ const candidates = ref<CandidateRule[]>([])
 const selectedCandidates = ref<CandidateRule[]>([])
 const searchText = ref('')
 const minConfidence = ref(0.7)
+const candidatePage = ref(1)
+const candidatePageSize = ref(20)
 
 const filteredCandidates = computed(() => {
   if (!searchText.value) {
@@ -276,6 +311,15 @@ const filteredCandidates = computed(() => {
     c.columnName.toLowerCase().includes(keyword) ||
     c.standardValue.toLowerCase().includes(keyword)
   )
+})
+
+const pagedCandidates = computed(() => {
+  const start = (candidatePage.value - 1) * candidatePageSize.value
+  return filteredCandidates.value.slice(start, start + candidatePageSize.value)
+})
+
+watch(searchText, () => {
+  candidatePage.value = 1
 })
 
 onMounted(async () => {
@@ -486,16 +530,42 @@ async function showCandidates() {
   await loadCandidates()
 }
 
-async function loadCandidates() {
+/**
+ * @param resetPage 换筛选条件或首次打开时回到第一页；审核掉几条则留在当前页，
+ *                  后面的数据会自动补上来，不至于丢位置
+ */
+async function loadCandidates(resetPage = true) {
   loadingCandidates.value = true
   try {
     candidates.value = await getPendingRules(minConfidence.value) as any
+
+    if (resetPage) {
+      candidatePage.value = 1
+    } else {
+      const lastPage = Math.max(1, Math.ceil(filteredCandidates.value.length / candidatePageSize.value))
+      if (candidatePage.value > lastPage) {
+        candidatePage.value = lastPage
+      }
+    }
   } catch (error) {
     console.error('加载候选规则失败', error)
     ElMessage.error('加载候选规则失败')
   } finally {
     loadingCandidates.value = false
   }
+}
+
+function handleConfidenceFilter() {
+  loadCandidates()
+}
+
+function handleCandidatePageChange(page: number) {
+  candidatePage.value = page
+}
+
+function handleCandidateSizeChange(size: number) {
+  candidatePageSize.value = size
+  candidatePage.value = 1
 }
 
 function handleSelectionChange(selection: CandidateRule[]) {
@@ -526,7 +596,7 @@ async function handleApprove() {
     })
 
     ElMessage.success('审核完成')
-    await loadCandidates()
+    await loadCandidates(false)
     await loadStats()
   } catch (error: any) {
     if (error !== 'cancel') {
@@ -560,7 +630,7 @@ async function handleReject() {
     })
 
     ElMessage.success('已拒绝')
-    await loadCandidates()
+    await loadCandidates(false)
     await loadStats()
   } catch (error: any) {
     if (error !== 'cancel') {
@@ -579,6 +649,17 @@ function getConfidenceType(confidence: number) {
 
 function getRowClassName({ row }: { row: CandidateRule }) {
   return row.isDuplicate ? 'duplicate-row' : ''
+}
+
+/** 错误值超过这个数量就折叠，避免撑高行高 */
+const DIRTY_VISIBLE = 2
+
+function visibleDirtyValues(row: CandidateRule) {
+  return row.dirtyValues.slice(0, DIRTY_VISIBLE)
+}
+
+function hiddenDirtyCount(row: CandidateRule) {
+  return Math.max(0, row.dirtyValues.length - DIRTY_VISIBLE)
 }
 
 function isSelectable(row: CandidateRule) {
@@ -631,6 +712,39 @@ function getProgress() {
 .stat-label {
   font-size: 14px;
   color: #909399;
+}
+
+.dirty-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.candidate-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.dirty-pop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reason-icon {
+  cursor: pointer;
+  color: #909399;
+}
+
+.reason-icon:hover {
+  color: #409eff;
+}
+
+.reason-pop {
+  line-height: 1.7;
+  color: #606266;
 }
 
 :deep(.duplicate-row) {
