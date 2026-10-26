@@ -171,6 +171,8 @@ public class SystemConfigService {
         setDefaultConfig("llm.temperature", "0.3", "大模型温度");
         setDefaultConfig("llm.max_tokens", "2000", "最大Token数");
         setDefaultConfig("llm.batch_size", "50", "批处理大小");
+        setDefaultConfig("llm.max_concurrency", "1", "同时请求大模型的最大次数");
+        setDefaultConfig("llm.request_interval_seconds", "0", "两次大模型请求之间的间隔秒数，0 为不限制");
         
         // 自学习配置
         setDefaultConfig("self_learning.enabled", "true", "是否启用自学习");

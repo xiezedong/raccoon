@@ -42,8 +42,8 @@ public class AIDiscoveryService {
 
     /**
      * 全自动发现 - 扫描所有表和字段（同步版本，用于兼容）
+     * 无事务：整轮要串行等大模型，事务会长时间占用连接池连接
      */
-    @Transactional
     public DiscoveryResult discoverAll() {
         log.info("开始全自动 AI 发现（同步）");
         
@@ -231,8 +231,8 @@ public class AIDiscoveryService {
 
     /**
      * 发现指定表字段的潜在脏数据
+     * 无事务：多批次大模型调用耗时不可控，只在末尾 saveAll 处由仓储自身事务提交
      */
-    @Transactional
     public DiscoveryResult discover(String tableName, String columnName, String columnDescription) {
         log.info("开始 AI 发现: {}.{}", tableName, columnName);
         

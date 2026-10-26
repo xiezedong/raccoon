@@ -288,7 +288,9 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('scan.scheduled.preset', 'disabled', '定时扫描预设时间'),
 ('scan.scheduled.cron', '0 0 2 * * ?', '定时扫描Cron表达式'),
 ('scan.scheduled.min_interval_hours', '6', '定时扫描最小执行间隔（小时）'),
-('llm.batch_size', '50', '每批发送给大模型的数量')
+('llm.batch_size', '50', '每批发送给大模型的数量'),
+('llm.max_concurrency', '1', '同时请求大模型的最大次数'),
+('llm.request_interval_seconds', '0', '两次大模型请求之间的间隔秒数，0 为不限制')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- 创建更新时间触发器函数

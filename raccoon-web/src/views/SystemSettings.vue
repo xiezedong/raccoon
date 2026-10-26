@@ -153,17 +153,24 @@
               <span class="form-tip">每批发送给大模型的数据量</span>
             </el-form-item>
 
-            <el-alert
-              title="常用 API 地址"
-              type="info"
-              :closable="false"
-            >
-              <div style="line-height: 1.8;">
-                <div><strong>OpenAI:</strong> https://api.openai.com/v1/chat/completions</div>
-                <div><strong>通义千问:</strong> https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions</div>
-                <div><strong>文心一言:</strong> https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions</div>
-              </div>
-            </el-alert>
+            <el-form-item label="同时请求大模型的最大次数">
+              <el-input-number
+                v-model="maxConcurrencyValue"
+                :min="1"
+                :max="10"
+              />
+            </el-form-item>
+
+            <el-form-item label="模型请求间隔（秒）">
+              <el-input-number
+                v-model="requestIntervalValue"
+                :min="0"
+                :max="600"
+              />
+              <span class="form-tip">两次请求开始之间的最小间隔，0 为不限制</span>
+            </el-form-item>
+
+
           </el-form>
         </el-tab-pane>
 
@@ -455,6 +462,16 @@ const maxTokensValue = computed({
 const batchSizeValue = computed({
   get: () => parseInt(configs.value['llm.batch_size'] || '50'),
   set: (val) => configs.value['llm.batch_size'] = val.toString()
+})
+
+const maxConcurrencyValue = computed({
+  get: () => parseInt(configs.value['llm.max_concurrency'] || '1'),
+  set: (val) => configs.value['llm.max_concurrency'] = val.toString()
+})
+
+const requestIntervalValue = computed({
+  get: () => parseInt(configs.value['llm.request_interval_seconds'] || '0'),
+  set: (val) => configs.value['llm.request_interval_seconds'] = val.toString()
 })
 
 const selfLearningEnabled = computed({
