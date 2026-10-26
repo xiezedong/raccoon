@@ -62,13 +62,23 @@
         <div style="display: flex; justify-content: space-between; align-items: center">
           <span>AI 智能发现</span>
           <el-button 
+            v-if="!discovering"
             type="primary" 
             :icon="Search" 
             @click="handleDiscoverAll"
-            :loading="discovering"
             size="large"
           >
             开始全自动发现
+          </el-button>
+          <el-button 
+            v-else
+            type="danger" 
+            :icon="VideoPause" 
+            :loading="stopping"
+            @click="handleStop"
+            size="large"
+          >
+            停止当前发现
           </el-button>
         </div>
       </template>
@@ -230,14 +240,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, List } from '@element-plus/icons-vue'
-import { discoverAll, getPendingRules, reviewRules, getStats } from '@/api/discovery'
-import type { CandidateRule, DiscoveryResult } from '@/types'
+import { Search, Refresh, List, VideoPause } from '@element-plus/icons-vue'
+import { discoverAllAsync, getTaskStatus, getRecentTasks, cancelTask, getPendingRules, reviewRules, getStats } from '@/api/discovery'
+import type { CandidateRule, DiscoveryResult, DiscoveryTask } from '@/types'
 import Layout from '@/components/Layout.vue'
 
 const discovering = ref(false)
+const stopping = ref(false)
+const currentTaskId = ref<number | null>(null)
 const lastResult = ref<DiscoveryResult | null>(null)
 
 const stats = ref({
@@ -266,9 +278,30 @@ const filteredCandidates = computed(() => {
   )
 })
 
-onMounted(() => {
-  loadStats()
+onMounted(async () => {
+  await loadStats()
+  await resumeRunningTask()
 })
+
+onUnmounted(stopPolling)
+
+/**
+ * 后台任务不随页面卸载而停止，重新进入本页时按最近任务恢复进度显示
+ */
+async function resumeRunningTask() {
+  try {
+    const tasks = await getRecentTasks() as unknown as DiscoveryTask[]
+    const running = tasks.find(t => t.status === 'running' || t.status === 'pending')
+
+    if (running) {
+      discovering.value = true
+      currentTaskId.value = running.id
+      pollTaskStatus(running.id)
+    }
+  } catch (error) {
+    console.error('恢复发现任务状态失败', error)
+  }
+}
 
 async function loadStats() {
   try {
@@ -298,15 +331,12 @@ async function handleDiscoverAll() {
   lastResult.value = null
 
   try {
-    // 调用异步接口
-    const response = await fetch('/api/candidate-rules/discover-all-async', {
-      method: 'POST'
-    })
-    const result = await response.json()
+    const result = await discoverAllAsync() as unknown as { success: boolean; taskId: number }
 
     if (result.success && result.taskId) {
+      currentTaskId.value = result.taskId
       ElMessage.success('AI 发现任务已启动，正在后台执行')
-      
+
       // 开始轮询任务状态
       pollTaskStatus(result.taskId)
     } else {
@@ -320,24 +350,64 @@ async function handleDiscoverAll() {
   }
 }
 
+/**
+ * 取消只写任务状态，后台要到下一个批次边界才真正停手，
+ * 所以这里不立刻收尾，等轮询读到 cancelled 再恢复按钮
+ */
+async function handleStop() {
+  if (!currentTaskId.value) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '正在分析的那一批数据仍会跑完，已发现的候选规则会保留。确定停止吗？',
+      '确认停止',
+      {
+        confirmButtonText: '停止',
+        cancelButtonText: '继续跑',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  stopping.value = true
+  try {
+    const result = await cancelTask(currentTaskId.value) as unknown as { success: boolean; message: string }
+
+    if (result.success) {
+      ElMessage.info('已请求停止，当前批次跑完后结束')
+    } else {
+      ElMessage.warning(result.message || '任务已不在运行中')
+    }
+  } catch (error) {
+    console.error('停止发现任务失败', error)
+    ElMessage.error('停止失败')
+  } finally {
+    stopping.value = false
+  }
+}
+
 // 轮询任务状态
 let pollTimer: any = null
-async function pollTaskStatus(taskId: number) {
+
+function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer)
+    pollTimer = null
   }
+}
+
+async function pollTaskStatus(taskId: number) {
+  stopPolling()
 
   pollTimer = setInterval(async () => {
     try {
-      const response = await fetch(`/api/candidate-rules/task/${taskId}`)
-      const task = await response.json()
+      const task = await getTaskStatus(taskId) as unknown as DiscoveryTask
 
       if (task.status === 'running') {
-        // 更新进度信息
-        const progress = task.totalFields > 0 
-          ? Math.round((task.processedFields / task.totalFields) * 100) 
-          : 0
-        
         lastResult.value = {
           success: true,
           message: `正在分析 ${task.currentTable}.${task.currentColumn} (${task.processedFields}/${task.totalFields})`,
@@ -349,9 +419,10 @@ async function pollTaskStatus(taskId: number) {
         } as any
       } else if (task.status === 'completed') {
         // 任务完成
-        clearInterval(pollTimer)
+        stopPolling()
         discovering.value = false
-        
+        currentTaskId.value = null
+
         lastResult.value = {
           success: true,
           message: `发现完成！共分析 ${task.totalFields} 个字段，发现 ${task.candidatesFound} 条候选规则`,
@@ -361,9 +432,9 @@ async function pollTaskStatus(taskId: number) {
           startTime: '',
           endTime: ''
         } as any
-        
+
         await loadStats()
-        
+
         if (task.candidatesFound > 0) {
           ElMessageBox.confirm(
             `已发现 ${task.candidatesFound} 条候选规则，是否立即审核？`,
@@ -379,9 +450,10 @@ async function pollTaskStatus(taskId: number) {
         }
       } else if (task.status === 'failed') {
         // 任务失败
-        clearInterval(pollTimer)
+        stopPolling()
         discovering.value = false
-        
+        currentTaskId.value = null
+
         lastResult.value = {
           success: false,
           message: task.errorMessage || '发现失败',
@@ -391,13 +463,16 @@ async function pollTaskStatus(taskId: number) {
           startTime: '',
           endTime: ''
         } as any
-        
+
         ElMessage.error(task.errorMessage || '发现失败')
       } else if (task.status === 'cancelled') {
         // 任务取消
-        clearInterval(pollTimer)
+        stopPolling()
         discovering.value = false
-        
+        currentTaskId.value = null
+
+        // 停止前已入库的候选规则仍要反映到统计上
+        await loadStats()
         ElMessage.info('任务已取消')
       }
     } catch (error) {

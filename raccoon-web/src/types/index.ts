@@ -63,6 +63,25 @@ export interface DiscoveryResult {
 }
 
 /**
+ * AI 发现任务
+ */
+export interface DiscoveryTask {
+  id: number
+  taskName?: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  totalFields: number
+  processedFields: number
+  currentTable?: string
+  currentColumn?: string
+  candidatesFound: number
+  errorMessage?: string
+  startedAt?: string
+  completedAt?: string
+  createdAt?: string
+  progress: number
+}
+
+/**
  * 脏数据记录
  */
 export interface DirtyDataRecord {

@@ -10,6 +10,8 @@ import com.raccoon.datacleaning.repository.DiscoveryTaskRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,7 +70,7 @@ public class AIDiscoveryService {
             for (TableColumn tc : tableColumns) {
                 try {
                     log.info("分析字段: {}.{}", tc.getTableName(), tc.getColumnName());
-                    DiscoveryResult fieldResult = discover(tc.getTableName(), tc.getColumnName(), tc.getColumnComment());
+                    DiscoveryResult fieldResult = discover(tc.getTableName(), tc.getColumnName(), tc.getColumnComment(), null);
                     if (fieldResult.isSuccess()) {
                         totalCandidates += fieldResult.getCandidateCount();
                     }
@@ -151,18 +153,22 @@ public class AIDiscoveryService {
             int processedCount = 0;
             
             for (TableColumn tc : tableColumns) {
+                if (isCancelled(taskId)) {
+                    log.info("发现任务已取消，跳过剩余字段: taskId={}, 已处理={}", taskId, processedCount);
+                    return;
+                }
+
                 try {
                     // 更新当前处理的字段
-                    task.setCurrentTable(tc.getTableName());
-                    task.setCurrentColumn(tc.getColumnName());
-                    task.setProcessedFields(processedCount);
-                    discoveryTaskRepository.save(task);
+                    discoveryTaskRepository.updateProgress(
+                            taskId, tc.getTableName(), tc.getColumnName(), processedCount);
                     
                     log.info("分析字段 [{}/{}]: {}.{}", 
                         processedCount + 1, tableColumns.size(), 
                         tc.getTableName(), tc.getColumnName());
                     
-                    DiscoveryResult fieldResult = discover(tc.getTableName(), tc.getColumnName(), tc.getColumnComment());
+                    DiscoveryResult fieldResult = discover(
+                        tc.getTableName(), tc.getColumnName(), tc.getColumnComment(), taskId);
                     if (fieldResult.isSuccess()) {
                         totalCandidates += fieldResult.getCandidateCount();
                     }
@@ -174,6 +180,11 @@ public class AIDiscoveryService {
                     processedCount++;
                     // 继续处理下一个字段
                 }
+            }
+
+            if (isCancelled(taskId)) {
+                log.info("发现任务已取消，不写完成状态: taskId={}", taskId);
+                return;
             }
             
             // 任务完成
@@ -195,6 +206,36 @@ public class AIDiscoveryService {
         }
     }
     
+    /**
+     * 服务重启会带走正在执行的 @Async 线程，但任务记录仍停在 pending/running。
+     * 启动时统一标为失败，否则前端会认为始终有任务在跑、锁住发现入口。
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void failInterruptedTasks() {
+        for (String previousStatus : List.of("pending", "running")) {
+            for (DiscoveryTask task : discoveryTaskRepository.findByStatusOrderByCreatedAtDesc(previousStatus)) {
+                task.setStatus("failed");
+                task.setCompletedAt(LocalDateTime.now());
+                task.setErrorMessage("服务重启，任务中断");
+                discoveryTaskRepository.save(task);
+                log.warn("标记中断的发现任务为失败: taskId={}, 原状态={}", task.getId(), previousStatus);
+            }
+        }
+    }
+
+    /**
+     * 任务是否已被取消。每个字段、每批次开头各查一次，
+     * 相对一次大模型调用的耗时可以忽略
+     */
+    private boolean isCancelled(Long taskId) {
+        if (taskId == null) {
+            return false;
+        }
+        return discoveryTaskRepository.findById(taskId)
+                .map(t -> "cancelled".equals(t.getStatus()))
+                .orElse(false);
+    }
+
     /**
      * 获取任务状态
      */
@@ -232,8 +273,10 @@ public class AIDiscoveryService {
     /**
      * 发现指定表字段的潜在脏数据
      * 无事务：多批次大模型调用耗时不可控，只在末尾 saveAll 处由仓储自身事务提交
+     *
+     * @param taskId 所属发现任务，用于响应取消；单独分析一个字段的同步调用传 null
      */
-    public DiscoveryResult discover(String tableName, String columnName, String columnDescription) {
+    public DiscoveryResult discover(String tableName, String columnName, String columnDescription, Long taskId) {
         log.info("开始 AI 发现: {}.{}", tableName, columnName);
         
         DiscoveryResult result = new DiscoveryResult();
@@ -272,6 +315,12 @@ public class AIDiscoveryService {
             List<CandidateRule> allCandidates = new ArrayList<>();
             
             for (int i = 0; i < filteredValues.size(); i += batchSize) {
+                if (isCancelled(taskId)) {
+                    log.info("发现任务已取消，中断本字段剩余批次: taskId={}, {}.{}",
+                        taskId, tableName, columnName);
+                    break;
+                }
+
                 int end = Math.min(i + batchSize, filteredValues.size());
                 List<DirtyDataDetector.ValueCount> batch = filteredValues.subList(i, end);
                 

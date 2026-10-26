@@ -92,7 +92,8 @@ public class CandidateRuleController {
         AIDiscoveryService.DiscoveryResult result = aiDiscoveryService.discover(
             request.getTableName(),
             request.getColumnName(),
-            request.getColumnDescription()
+            request.getColumnDescription(),
+            null
         );
         return ResponseEntity.ok(result);
     }
