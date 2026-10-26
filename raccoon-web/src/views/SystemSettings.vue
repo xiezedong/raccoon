@@ -140,9 +140,7 @@
             <el-form-item label="最大Token数">
               <el-input-number
                 v-model="maxTokensValue"
-                :min="100"
-                :max="8000"
-                :step="100"
+                :min="1"
               />
             </el-form-item>
 
@@ -221,8 +219,8 @@
             </el-form-item>
 
             <el-form-item label="Cron 表达式" v-if="scheduledDiscoveryEnabled && scheduledPreset === 'custom'">
-              <el-input 
-                v-model="configs['ai_discovery.scheduled.cron']" 
+              <el-input
+                v-model="configs['ai_discovery.scheduled.cron']"
                 placeholder="0 0 2 * * ?"
                 style="width: 300px"
               />
@@ -308,8 +306,8 @@
             </el-form-item>
 
             <el-form-item label="Cron 表达式" v-if="scheduledScanEnabled && scheduledScanPreset === 'custom'">
-              <el-input 
-                v-model="configs['scan.scheduled.cron']" 
+              <el-input
+                v-model="configs['scan.scheduled.cron']"
                 placeholder="0 0 2 * * ?"
                 style="width: 300px"
               />
@@ -651,7 +649,7 @@ async function handleGetDefaultPrompt() {
   try {
     const response = await fetch('/api/system/config/default-prompt')
     const data = await response.json()
-    
+
     ElMessage.success('已加载默认提示词')
     configs.value['ai_discovery.prompt_template'] = data.template
   } catch (error) {
@@ -669,7 +667,7 @@ async function handleResetPrompt() {
       method: 'POST'
     })
     const data = await response.json()
-    
+
     if (data.success) {
       ElMessage.success('提示词已重置为默认值')
       configs.value['ai_discovery.prompt_template'] = ''
