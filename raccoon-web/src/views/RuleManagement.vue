@@ -10,7 +10,7 @@
           :disabled="selectedRules.length === 0"
           :loading="batchDeleting"
         >
-          批量删除 ({{ selectedRules.length }})
+          删除本页选中 ({{ selectedRules.length }})
         </el-button>
         <el-button :icon="Download" @click="downloadTemplate">下载模板</el-button>
         <el-upload
@@ -22,6 +22,30 @@
         </el-upload>
         <el-button type="primary" :icon="Plus" @click="handleAdd">新增规则</el-button>
       </div>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="filter-bar">
+      <el-input
+        v-model="query.keyword"
+        placeholder="表名 / 字段名 / 标准值"
+        clearable
+        class="keyword-input"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+      />
+      <el-select
+        v-model="query.source"
+        placeholder="全部来源"
+        clearable
+        class="source-select"
+        @change="handleSearch"
+      >
+        <el-option label="手动" value="manual" />
+        <el-option label="AI自动" value="ai_auto" />
+        <el-option label="AI确认" value="ai_confirmed" />
+      </el-select>
+      <el-button @click="handleReset">重置筛选</el-button>
     </div>
 
     <!-- 规则列表 -->
@@ -68,6 +92,19 @@
       </el-table-column>
     </el-table>
 
+    <div class="pagination-bar">
+      <el-pagination
+        :current-page="query.page"
+        :page-size="query.size"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @size-change="handleSizeChange"
+        @current-change="handlePageChange"
+      />
+    </div>
+
     <!-- 规则表单对话框 -->
     <el-dialog
       v-model="dialogVisible"
@@ -112,16 +149,24 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload, Download, Delete } from '@element-plus/icons-vue'
 import { getRules, createRule, updateRule, deleteRule, importRules, batchDeleteRules } from '@/api/rule'
-import type { CleaningRule } from '@/types'
+import type { CleaningRule, PageResult } from '@/types'
 import Layout from '@/components/Layout.vue'
 
 const loading = ref(false)
 const rules = ref<CleaningRule[]>([])
 const selectedRules = ref<CleaningRule[]>([])
+const total = ref(0)
 const batchDeleting = ref(false)
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增规则')
 const formRef = ref()
+
+const query = reactive({
+  page: 1,
+  size: 20,
+  keyword: '',
+  source: ''
+})
 
 const form = reactive<CleaningRule & { dirtyValuesInput?: string }>({
   tableName: '',
@@ -149,11 +194,54 @@ onMounted(() => {
 async function loadRules() {
   loading.value = true
   try {
-    rules.value = await getRules() as any
+    const res = await getRules({
+      page: query.page - 1,
+      size: query.size,
+      keyword: query.keyword.trim() || undefined,
+      source: query.source || undefined
+    }) as unknown as PageResult<CleaningRule>
+
+    rules.value = res.content
+    total.value = res.totalElements
+    selectedRules.value = []
   } catch (error) {
     console.error('加载规则失败', error)
   } finally {
     loading.value = false
+  }
+}
+
+function handleSearch() {
+  query.page = 1
+  loadRules()
+}
+
+function handleReset() {
+  query.keyword = ''
+  query.source = ''
+  query.page = 1
+  loadRules()
+}
+
+function handlePageChange(page: number) {
+  query.page = page
+  loadRules()
+}
+
+function handleSizeChange(size: number) {
+  query.size = size
+  query.page = 1
+  loadRules()
+}
+
+/**
+ * 删除后当前页可能已不存在，先回退到最后一页再刷新
+ */
+function clampPageAfterDelete(deletedCount: number) {
+  const remaining = Math.max(0, total.value - deletedCount)
+  const lastPage = Math.max(1, Math.ceil(remaining / query.size))
+  if (query.page > lastPage) {
+    query.page = lastPage
   }
 }
 
@@ -178,6 +266,7 @@ async function handleDelete(row: CleaningRule) {
     
     await deleteRule(row.id!)
     ElMessage.success('删除成功')
+    clampPageAfterDelete(1)
     loadRules()
   } catch (error) {
     // 用户取消
@@ -192,7 +281,7 @@ async function handleBatchDelete() {
   
   try {
     await ElMessageBox.confirm(
-      `确定要删除选中的 ${selectedRules.value.length} 条规则吗？删除后无法恢复。`,
+      `确定要删除本页选中的 ${selectedRules.value.length} 条规则吗？删除后无法恢复。`,
       '批量删除确认',
       {
         type: 'warning',
@@ -211,6 +300,7 @@ async function handleBatchDelete() {
     
     // 清空选择并重新加载
     selectedRules.value = []
+    clampPageAfterDelete(result.deletedCount)
     loadRules()
     
   } catch (error: any) {
@@ -243,6 +333,7 @@ async function handleSubmit() {
     } else {
       await createRule(form)
       ElMessage.success('创建成功')
+      query.page = 1
     }
     
     dialogVisible.value = false
@@ -256,6 +347,7 @@ async function handleImport(file: File) {
   try {
     const result = await importRules(file) as any
     ElMessage.success(result.message || '导入成功')
+    query.page = 1
     loadRules()
   } catch (error) {
     console.error('导入失败', error)
@@ -365,5 +457,26 @@ function getSourceLabel(source: string) {
 .actions {
   display: flex;
   gap: 10px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.keyword-input {
+  width: 260px;
+}
+
+.source-select {
+  width: 140px;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

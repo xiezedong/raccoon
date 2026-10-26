@@ -1,4 +1,13 @@
 /**
+ * 后端分页响应（Spring Data Page）
+ */
+export interface PageResult<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+}
+
+/**
  * 清洗规则
  */
 export interface CleaningRule {

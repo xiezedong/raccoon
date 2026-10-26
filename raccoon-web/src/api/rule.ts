@@ -1,11 +1,20 @@
 import request from '@/utils/request'
-import type { CleaningRule } from '@/types'
+import type { CleaningRule, PageResult } from '@/types'
+
+export interface RuleQuery {
+  /** 页码，从 0 开始 */
+  page: number
+  size: number
+  /** 匹配表名、字段名、标准值 */
+  keyword?: string
+  source?: string
+}
 
 /**
- * 获取所有规则
+ * 分页查询规则
  */
-export function getRules() {
-  return request.get<CleaningRule[]>('/rules')
+export function getRules(query: RuleQuery) {
+  return request.get<PageResult<CleaningRule>>('/rules', { params: query })
 }
 
 /**
